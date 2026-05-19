@@ -49,11 +49,43 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "gpt_free_config.json")
+
+
+def _load_local_config() -> dict:
+    """读取本地 JSON 配置；文件不存在时使用安全默认值。"""
+    if not os.path.exists(CONFIG_FILE):
+        return {}
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"[配置错误] 读取 {CONFIG_FILE} 失败: {exc}") from exc
+    if not isinstance(data, dict):
+        raise SystemExit(f"[配置错误] {CONFIG_FILE} 顶层必须是 JSON 对象")
+    return data
+
+
+_LOCAL_CONFIG = _load_local_config()
+
+
+def _config_str(key: str, default: str = "") -> str:
+    value = _LOCAL_CONFIG.get(key, default)
+    return str(value).strip() if value is not None else ""
+
+
+def _config_int(key: str, default: int) -> int:
+    value = _LOCAL_CONFIG.get(key, default)
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(f"[配置错误] {key} 必须是整数") from exc
+
 # 全局调试标志
 DEBUG_MODE = False
 _bot_instance = None  # 保存 ChatGPTBot 引用，用于调试暂停
 GOPAY_OTP_CODE_FILE = ""
-HEROSMS_APIKEY = os.environ.get("HEROSMS_APIKEY", os.environ.get("HERO_SMS_APIKEY", ""))
+HEROSMS_APIKEY = _config_str("HEROSMS_APIKEY")
 HEROSMS_INTERVAL = 5
 HEROSMS_FINISH_AFTER = False
 ANDROID_DEVICE_SERIAL = "emulator-5554"
@@ -105,13 +137,13 @@ TEMP_EMAIL_API = "https://YOUR_TEMP_EMAIL_API_DOMAIN"
 TEMP_EMAIL_LOGIN_BASE = "https://YOUR_TEMP_EMAIL_API_DOMAIN"
 
 # -------- 1.1 OutlookEmailPlus 服务 -----------------------------------------
-OUTLOOK_EMAIL_PLUS_API_BASE = "http://127.0.0.1:5001"
-OUTLOOK_EMAIL_PLUS_API_KEY = os.environ.get("OUTLOOK_EMAIL_PLUS_API_KEY", "")
-OUTLOOK_EMAIL_PLUS_PROVIDER = "outlook"
-OUTLOOK_EMAIL_PLUS_CALLER_ID = "chatgpt-registration-bot"
-OUTLOOK_EMAIL_PLUS_PROJECT_KEY = ""
-OUTLOOK_EMAIL_PLUS_EMAIL_DOMAIN = ""
-OUTLOOK_EMAIL_PLUS_BACKEND = "outlook_email_plus"  # 可选: outlook_email_plus / temp_email
+OUTLOOK_EMAIL_PLUS_API_BASE = _config_str("OUTLOOK_EMAIL_PLUS_API_BASE", "http://127.0.0.1:5001")
+OUTLOOK_EMAIL_PLUS_API_KEY = _config_str("OUTLOOK_EMAIL_PLUS_API_KEY")
+OUTLOOK_EMAIL_PLUS_PROVIDER = _config_str("OUTLOOK_EMAIL_PLUS_PROVIDER", "outlook")
+OUTLOOK_EMAIL_PLUS_CALLER_ID = _config_str("OUTLOOK_EMAIL_PLUS_CALLER_ID", "chatgpt-registration-bot")
+OUTLOOK_EMAIL_PLUS_PROJECT_KEY = _config_str("OUTLOOK_EMAIL_PLUS_PROJECT_KEY")
+OUTLOOK_EMAIL_PLUS_EMAIL_DOMAIN = _config_str("OUTLOOK_EMAIL_PLUS_EMAIL_DOMAIN")
+OUTLOOK_EMAIL_PLUS_BACKEND = _config_str("OUTLOOK_EMAIL_PLUS_BACKEND", "outlook_email_plus")  # 可选: outlook_email_plus / temp_email
 
 # -------- 2. GoPay 账号信息（订阅支付）---------------------------------------
 # ChatGPT Plus 印尼区订阅走 Stripe → Midtrans → GoPay，需要一个绑定好的
@@ -126,9 +158,9 @@ OUTLOOK_EMAIL_PLUS_BACKEND = "outlook_email_plus"  # 可选: outlook_email_plus 
 #   ④ 把手机号、国家码、PIN 填到下面三行
 #
 # 注意：如果 PIN 填错，付款 OTP 后会卡在 Midtrans 页面无法继续。
-GOPAY_PHONE = os.environ.get("GOPAY_PHONE", "")           # 不带 + 和国家码，纯数字，例 "13800138000"
-GOPAY_COUNTRY_CODE = os.environ.get("GOPAY_COUNTRY_CODE", "62")   # 国家码数字，例 "86"（中国）"62"（印尼）
-GOPAY_PIN = os.environ.get("GOPAY_PIN", "")             # 6 位 GoPay PIN，例 "123456"
+GOPAY_PHONE = _config_str("GOPAY_PHONE")           # 不带 + 和国家码，纯数字，例 "13800138000"
+GOPAY_COUNTRY_CODE = _config_str("GOPAY_COUNTRY_CODE", "62")   # 国家码数字，例 "86"（中国）"62"（印尼）
+GOPAY_PIN = _config_str("GOPAY_PIN")             # 6 位 GoPay PIN，例 "123456"
 
 # -------- 3. ChatGPT 注册默认参数 -------------------------------------------
 # 注册时填写的"姓"。命令行 --name 可临时覆盖。
@@ -142,10 +174,10 @@ EMAIL_PREFIX_TAG = "oai"
 # 自备邮箱母邮箱。启用手动邮箱模式但未通过 --email 指定邮箱时，脚本会自动
 # 生成形如 "fineregn+bfh@googlemail.com" 的别名邮箱用于注册。
 # 留空则保持原行为：启动后手动输入完整邮箱地址。
-MANUAL_EMAIL_BASE = os.environ.get("MANUAL_EMAIL_BASE", "")
+MANUAL_EMAIL_BASE = _config_str("MANUAL_EMAIL_BASE")
 
 # 自备邮箱别名长度。例如长度 3 时会生成 bfh 这类随机别名。
-MANUAL_EMAIL_ALIAS_LENGTH = 5
+MANUAL_EMAIL_ALIAS_LENGTH = _config_int("MANUAL_EMAIL_ALIAS_LENGTH", 5)
 
 # -------- 4. 订阅参数（一般无需修改）----------------------------------------
 SUBSCRIPTION_PLAN_NAME = "chatgptplusplan"

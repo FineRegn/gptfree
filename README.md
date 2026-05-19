@@ -13,7 +13,7 @@ gptfree/
 ├── codex_oauth_sub2api_once.py      # 单步 OAuth Sub2API 导出
 ├── release_outlook_email_pool.py/bat/cmd  # 邮箱池释放工具
 ├── outlookEmailPlus/                # 邮箱池 API 服务（Flask）
-├── codex-registrar2_token/          # Codex OAuth 注册器
+├── gpt_free_config.example.json     # 本地配置示例
 ├── screenshots/                     # 调试截图目录
 └── gpt_free_accounts.json           # 默认账号记录输出
 ```
@@ -30,29 +30,28 @@ cd "E:\Users\admin\Desktop\gptfree"
 python -m playwright install chromium
 ```
 
-### 1.2 配置 `gpt_free_core.py`
+### 1.2 配置 `gpt_free_config.json`
 
-打开 `gpt_free_core.py`，确认以下配置项：
+复制配置示例并填写本地密钥；`gpt_free_config.json` 已被 `.gitignore` 排除，不要提交到仓库：
+
+```powershell
+Copy-Item .\gpt_free_config.example.json .\gpt_free_config.json
+notepad .\gpt_free_config.json
+```
+
+常用配置项：
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
 | `OUTLOOK_EMAIL_PLUS_API_BASE` | 邮箱池 API 地址 | `http://127.0.0.1:5001` |
-| `OUTLOOK_EMAIL_PLUS_API_KEY` | 邮箱池 API Key | 环境变量配置 |
+| `OUTLOOK_EMAIL_PLUS_API_KEY` | 邮箱池 API Key | 本地 JSON 配置 |
 | `OUTLOOK_EMAIL_PLUS_CALLER_ID` | 调用方标识 | `chatgpt-registration-bot` |
 | `OUTLOOK_EMAIL_PLUS_PROJECT_KEY` | 项目 Key（防重复领取） | 留空 |
-| `HEROSMS_APIKEY` | HeroSMS API Key | 环境变量或参数配置 |
+| `HEROSMS_APIKEY` | HeroSMS API Key | 本地 JSON 配置，也可用参数覆盖 |
+| `MANUAL_EMAIL_BASE` | 自备邮箱母邮箱 | 留空 |
 | `DEFAULT_OAUTH_PROXY` | 代理地址 | `http://127.0.0.1:7897` |
 
-运行前至少配置以下本地密钥，不要提交到仓库：
-
-```powershell
-$env:OUTLOOK_EMAIL_PLUS_API_KEY="your_outlook_email_plus_key"
-$env:HEROSMS_APIKEY="your_herosms_key"
-```
-
-HeroSMS API Key 两种方式覆盖：
-- 环境变量：`$env:HEROSMS_APIKEY="your_key"`
-- 参数传入：`--herosms-apikey "your_key"`
+HeroSMS API Key 默认从 `gpt_free_config.json` 读取，也可用参数临时覆盖：`--herosms-apikey "your_key"`。
 
 ### 1.3 启动邮箱池服务
 

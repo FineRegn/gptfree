@@ -1,0 +1,15 @@
+{
+  "OUTLOOK_EMAIL_PLUS_API_BASE": "http://127.0.0.1:5001",
+  "OUTLOOK_EMAIL_PLUS_API_KEY": "your_outlook_email_plus_key",
+  "OUTLOOK_EMAIL_PLUS_PROVIDER": "outlook",
+  "OUTLOOK_EMAIL_PLUS_CALLER_ID": "chatgpt-registration-bot",
+  "OUTLOOK_EMAIL_PLUS_PROJECT_KEY": "",
+  "OUTLOOK_EMAIL_PLUS_EMAIL_DOMAIN": "",
+  "OUTLOOK_EMAIL_PLUS_BACKEND": "outlook_email_plus",
+  "HEROSMS_APIKEY": "your_herosms_key",
+  "GOPAY_PHONE": "",
+  "GOPAY_COUNTRY_CODE": "62",
+  "GOPAY_PIN": "",
+  "MANUAL_EMAIL_BASE": "",
+  "MANUAL_EMAIL_ALIAS_LENGTH": 5
+}

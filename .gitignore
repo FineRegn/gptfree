@@ -17,6 +17,7 @@ env/
 .env.*
 *.local
 secrets.*
+gpt_free_config.json
 
 # Runtime outputs
 accounts/
@@ -29,16 +30,6 @@ accounts.txt
 gpt_free_accounts.json
 sub2api-accounts*.json
 sub2api-free-batch-*.json
-
-# Codex registrar local config and outputs
-codex-registrar2_token/config.json
-codex-registrar2_token/config.local.json
-codex-registrar2_token/config.server.json
-codex-registrar2_token/accounts.json
-codex-registrar2_token/username.json
-codex-registrar2_token/shibai.json
-codex-registrar2_token/tokens/
-codex-registrar2_token/.DS_Store
 
 # Local databases and temporary files
 *.db
