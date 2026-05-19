@@ -7,9 +7,6 @@
   "OUTLOOK_EMAIL_PLUS_EMAIL_DOMAIN": "",
   "OUTLOOK_EMAIL_PLUS_BACKEND": "outlook_email_plus",
   "HEROSMS_APIKEY": "your_herosms_key",
-  "GOPAY_PHONE": "",
-  "GOPAY_COUNTRY_CODE": "62",
-  "GOPAY_PIN": "",
   "MANUAL_EMAIL_BASE": "",
   "MANUAL_EMAIL_ALIAS_LENGTH": 5
 }

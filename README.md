@@ -1,6 +1,6 @@
 # ChatGPT 免费手机号注册自动化
 
-基于 HeroSMS + OutlookEmailPlus 的 ChatGPT 哥伦比亚免费账号自动化注册工具。
+基于 HeroSMS + OutlookEmailPlus 的 ChatGPT 免费账号自动化注册工具。
 
 ## 目录结构
 
@@ -88,7 +88,7 @@ python release_outlook_email_pool.py --dry-run
 
 > 以下命令直接使用当前环境中的 `python` 执行。
 
-### 2.1 基础注册（自动领取邮箱 + HeroSMS 购号）
+### 2.1 基础注册（自动领取邮箱 + HeroSMS 手机验证）
 
 ```powershell
 cd "E:\Users\admin\Desktop\gptfree"
@@ -150,7 +150,7 @@ python -u gpt_free_ancientmethod_reg.py `
 
 > `--resume-phone`：不购号、不注册，使用指定手机号走同一个手机号入口登录已有账号；登录成功后继续执行 Codex OAuth、添加邮箱验证并导出 Sub2API。未指定 `--email` / `--claim-email` / `--resume-alias-email` 时，会自动从 OutlookEmailPlus 领取邮箱。
 
-### 2.7 仅测试 HeroSMS 购号（不注册）
+### 2.7 仅测试 HeroSMS 接码（不注册）
 
 ```powershell
 python -u gpt_free_ancientmethod_reg.py --herosms-only
@@ -196,7 +196,7 @@ python -u gpt_free_ancientmethod_reg.py `
   --debug
 ```
 
-> `--rounds` 会按轮次顺序执行，不是并发。批量模式每轮自动领取 OutlookEmailPlus 邮箱并自动购买 HeroSMS 手机号；邮箱池不足时直接终止后续轮次。
+> `--rounds` 会按轮次顺序执行，不是并发。批量模式每轮自动领取 OutlookEmailPlus 邮箱并自动完成 HeroSMS 手机验证；邮箱池不足时直接终止后续轮次。
 
 同一次运行会在 `accounts/<时间戳>/` 下按邮箱生成单账号 JSON。批量模式还会额外生成 `sub2api-free-batch-<时间戳>.json`，汇总本批次所有成功账号，便于一次性导入。
 
@@ -211,7 +211,7 @@ python -u gpt_free_ancientmethod_reg.py `
 | `--resume-phone <phone>` | 恢复模式：指定手机号登录已有账号后执行 OAuth/Sub2API 导出，必须配合 `--password` | — |
 | `--email <email>` | 自备邮箱 | — |
 | `--herosms-phone <phone>` | 跳过购号，复用已有号码 | — |
-| `--herosms-only` | 仅测试 HeroSMS 购号 | — |
+| `--herosms-only` | 仅测试 HeroSMS 接码 | — |
 | `--herosms-max-price <n>` | HeroSMS 购号最高价(USD) | `0.08` |
 | `--herosms-apikey <key>` | 覆盖 HeroSMS API Key | — |
 | `--herosms-country <id>` | 手动指定国家 ID | 自动解析 Colombia |
@@ -245,7 +245,7 @@ python -u gpt_free_ancientmethod_reg.py `
   ├── --resume-alias-email → 使用既有别名（不 claim，无 claim_token）
   ├── --email → 自备邮箱
   └── 默认 → OutlookEmailPlus 自动随机领取（含 +alias）
-第 2 步: HeroSMS 自动购买哥伦比亚手机号
+第 2 步: HeroSMS 自动手机号验证
 第 3 步: ChatGPT 手机号注册
 第 4 步: 邮箱验证码
 第 5 步: 个人信息（about-you）
@@ -257,7 +257,7 @@ python -u gpt_free_ancientmethod_reg.py `
 手机号验证码超时处理：
 
 ```
-当前 HeroSMS activation 超时 → 自动取消该 activation → 回到注册入口 → 重新买号重试
+当前 HeroSMS activation 超时 → 自动取消该 activation → 回到注册入口 → 重新获取手机号重试
 ```
 
 默认同一轮最多重试 `--phone-retries 3` 次。重试期间当前 OutlookEmailPlus 邮箱 claim 不释放，避免同一轮反复领取邮箱。

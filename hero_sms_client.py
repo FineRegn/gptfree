@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""HeroSMS GoPay OTP 查询客户端。
+"""HeroSMS 短信查询客户端。
 
-用于已知 GoPay 手机号场景：脚本仍在 GoPay 页面填写传入手机号，
-到 OTP 页后通过 HeroSMS 当前激活列表按手机号匹配 activation，再轮询短信验证码。
+用于已知手机号场景：通过 HeroSMS 当前激活列表按手机号匹配 activation，
+再轮询短信验证码。
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-# GoPay OTP 通常为 6 位。这里拒绝 4 位码，避免误取 HeroSMS 激活对象里的旧短码。
+# OTP 通常为 6 位。这里拒绝 4 位码，避免误取 HeroSMS 激活对象里的旧短码。
 CODE_RE = re.compile(r"(?<!\d)(\d{5,8})(?!\d)")
 PHONE_FIELD_KEYS = (
     "phoneNumber",
@@ -218,7 +218,7 @@ class HeroSMSClient:
                 if not activation_id:
                     logger.warning(f"HeroSMS 已匹配手机号但缺少 activation id: {sanitize_payload(item)}")
                     continue
-                logger.info(f"HeroSMS 已匹配 GoPay 手机号: {candidate_phone} (activation={activation_id})")
+                logger.info(f"HeroSMS 已匹配手机号: {candidate_phone} (activation={activation_id})")
                 return cast(dict[str, Any], item)
 
         sample = ", ".join(seen_phones[:10]) or "无可识别手机号"
@@ -254,7 +254,7 @@ class HeroSMSClient:
             await self._get("finishActivation", {"id": activation_id})
         logger.info(f"HeroSMS 已完成激活: {activation_id}")
 
-    async def poll_gopay_code_by_phone(
+    async def poll_code_by_phone(
         self,
         phone: str,
         timeout: int = 120,
@@ -266,7 +266,7 @@ class HeroSMSClient:
         matched_phone = extract_activation_phone(activation) or str(phone).strip()
         initial_code, initial_message = extract_code_from_payload(activation)
         if initial_code:
-            logger.info(f"HeroSMS 激活列表已有旧验证码，忽略并继续等待新 GoPay OTP: {initial_code[:2]}***")
+            logger.info(f"HeroSMS 激活列表已有旧验证码，忽略并继续等待新 OTP: {initial_code[:2]}***")
 
         deadline = asyncio.get_running_loop().time() + timeout
         last_message = initial_message
@@ -277,7 +277,7 @@ class HeroSMSClient:
             if message:
                 last_message = message
             if code:
-                logger.info(f"HeroSMS 已获取 GoPay OTP: {code[:2]}***")
+                logger.info(f"HeroSMS 已获取 OTP: {code[:2]}***")
                 if finish_after:
                     await self.finish_activation(activation_id)
                 else:
@@ -286,7 +286,7 @@ class HeroSMSClient:
             await asyncio.sleep(interval)
 
         detail = f"，最后响应: {last_message[:120]}" if last_message else ""
-        raise HeroSMSError(f"{timeout}s 内未收到 HeroSMS GoPay 验证码{detail}")
+        raise HeroSMSError(f"{timeout}s 内未收到 HeroSMS 验证码{detail}")
 
 
 def normalize_phone(phone: str, strict: bool = True) -> str:

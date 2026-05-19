@@ -216,7 +216,7 @@ async def _poll_hero_sms_code(
     logger.info(f"HeroSMS 接码启动：phone={phone} timeout={timeout}s interval={interval}s")
     try:
         client = HeroSMSClient(api_key)
-        result = await client.poll_gopay_code_by_phone(
+        result = await client.poll_code_by_phone(
             phone=phone,
             timeout=timeout,
             interval=interval,

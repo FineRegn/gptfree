@@ -84,14 +84,9 @@ def _config_int(key: str, default: int) -> int:
 # 全局调试标志
 DEBUG_MODE = False
 _bot_instance = None  # 保存 ChatGPTBot 引用，用于调试暂停
-GOPAY_OTP_CODE_FILE = ""
 HEROSMS_APIKEY = _config_str("HEROSMS_APIKEY")
 HEROSMS_INTERVAL = 5
 HEROSMS_FINISH_AFTER = False
-ANDROID_DEVICE_SERIAL = "emulator-5554"
-WHATSAPP_OTP_AUTO_ENABLED = False
-WHATSAPP_OTP_MAX_AGE_SECONDS = 120
-GOPAY_UNLINK_CLEANUP_ENABLED = False
 
 # ============================================================================
 # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼  用 户 配 置 区 域 (USER CONFIG)  ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
@@ -145,23 +140,6 @@ OUTLOOK_EMAIL_PLUS_PROJECT_KEY = _config_str("OUTLOOK_EMAIL_PLUS_PROJECT_KEY")
 OUTLOOK_EMAIL_PLUS_EMAIL_DOMAIN = _config_str("OUTLOOK_EMAIL_PLUS_EMAIL_DOMAIN")
 OUTLOOK_EMAIL_PLUS_BACKEND = _config_str("OUTLOOK_EMAIL_PLUS_BACKEND", "outlook_email_plus")  # 可选: outlook_email_plus / temp_email
 
-# -------- 2. GoPay 账号信息（订阅支付）---------------------------------------
-# ChatGPT Plus 印尼区订阅走 Stripe → Midtrans → GoPay，需要一个绑定好的
-# GoPay 账号。每次新注册的 ChatGPT 都用同一个 GoPay 账号支付：
-#   - 同一手机号会收到 WhatsApp OTP（一次性，每次不同，仍需手动输入）
-#   - 同一 6 位 PIN（写死，不再询问）
-#
-# 准备工作：
-#   ① 准备一台能装 GoPay App 的手机（Android/iOS 都行）
-#   ② 用一个能收 WhatsApp 的手机号注册 GoPay 并完成 KYC
-#   ③ 在 GoPay App 里设置 6 位 PIN
-#   ④ 把手机号、国家码、PIN 填到下面三行
-#
-# 注意：如果 PIN 填错，付款 OTP 后会卡在 Midtrans 页面无法继续。
-GOPAY_PHONE = _config_str("GOPAY_PHONE")           # 不带 + 和国家码，纯数字，例 "13800138000"
-GOPAY_COUNTRY_CODE = _config_str("GOPAY_COUNTRY_CODE", "62")   # 国家码数字，例 "86"（中国）"62"（印尼）
-GOPAY_PIN = _config_str("GOPAY_PIN")             # 6 位 GoPay PIN，例 "123456"
-
 # -------- 3. ChatGPT 注册默认参数 -------------------------------------------
 # 注册时填写的"姓"。命令行 --name 可临时覆盖。
 # 留默认时会自动生成英文随机姓名（推荐）。
@@ -179,15 +157,6 @@ MANUAL_EMAIL_BASE = _config_str("MANUAL_EMAIL_BASE")
 # 自备邮箱别名长度。例如长度 3 时会生成 bfh 这类随机别名。
 MANUAL_EMAIL_ALIAS_LENGTH = _config_int("MANUAL_EMAIL_ALIAS_LENGTH", 5)
 
-# -------- 4. 订阅参数（一般无需修改）----------------------------------------
-SUBSCRIPTION_PLAN_NAME = "chatgptplusplan"
-SUBSCRIPTION_BILLING_COUNTRY = "ID"          # 印尼
-SUBSCRIPTION_CURRENCY = "IDR"
-# 1 个月免费试用的 promo campaign id；ChatGPT 后端会校验。
-# 如果该活动失效，需要抓包看新的活动 id。
-SUBSCRIPTION_PROMO_CAMPAIGN_ID = "plus-1-month-free"
-SUBSCRIPTION_CANCEL_URL = "https://chatgpt.com/#pricing"
-
 # ============================================================================
 # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 用户配置区域结束 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 # ============================================================================
@@ -203,19 +172,13 @@ CODEX_OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 CODEX_OAUTH_REDIRECT_URI = "http://localhost:1455/auth/callback"
 DEFAULT_OAUTH_PROXY = "http://127.0.0.1:7897"
 
-GOPAY_COUNTRY_OPTIONS = {
-    "62": "Indonesia (+62)",
-    "86": "China (+86)",
-}
-
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
 
 # ===================== 启动校验：用户配置是否完整 =====================
-def _validate_user_config(skip_temp_email: bool = False, skip_payment: bool = False, email_backend: str = "temp_email"):
+def _validate_user_config(skip_temp_email: bool = False, email_backend: str = "temp_email"):
     """启动时检查 USER CONFIG 区域是否还有未填写的 YOUR_xxx 占位符。
     skip_temp_email: --manual-email 模式可跳过临时邮箱配置检查。
-    skip_payment:    --skip-payment 模式可跳过 GoPay 配置检查。
     """
     placeholders = {}
     if not skip_temp_email and email_backend == "temp_email":
@@ -225,11 +188,6 @@ def _validate_user_config(skip_temp_email: bool = False, skip_payment: bool = Fa
         placeholders["OUTLOOK_EMAIL_PLUS_API_BASE"] = OUTLOOK_EMAIL_PLUS_API_BASE
         placeholders["OUTLOOK_EMAIL_PLUS_API_KEY"] = OUTLOOK_EMAIL_PLUS_API_KEY
         placeholders["OUTLOOK_EMAIL_PLUS_CALLER_ID"] = OUTLOOK_EMAIL_PLUS_CALLER_ID
-    if not skip_payment:
-        placeholders["GOPAY_PHONE"] = GOPAY_PHONE
-        placeholders["GOPAY_COUNTRY_CODE"] = GOPAY_COUNTRY_CODE
-        placeholders["GOPAY_PIN"] = GOPAY_PIN
-
     missing = [k for k, v in placeholders.items() if "YOUR_" in str(v).upper()]
     if missing:
         raise SystemExit(
@@ -237,15 +195,6 @@ def _validate_user_config(skip_temp_email: bool = False, skip_payment: bool = Fa
             + "\n  - ".join(missing)
             + "\n详见脚本头部 USER CONFIG 注释。\n"
         )
-    if not skip_payment and GOPAY_COUNTRY_CODE not in GOPAY_COUNTRY_OPTIONS:
-        raise SystemExit(
-            "[配置错误] GOPAY_COUNTRY_CODE 当前仅支持: "
-            + ", ".join(sorted(GOPAY_COUNTRY_OPTIONS.keys()))
-        )
-    if not skip_payment and (len(GOPAY_PIN) != 6 or not GOPAY_PIN.isdigit()):
-        raise SystemExit("[配置错误] GOPAY_PIN 必须是 6 位数字字符串")
-
-
 # ===================== 工具函数 =====================
 def generate_strong_password(length: int = 16) -> str:
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
@@ -474,10 +423,6 @@ class UserAlreadyExistsError(SignupFlowError):
         if email:
             message = f"{message}: {email}"
         super().__init__(message)
-
-
-class PaymentError(Exception):
-    pass
 
 
 class VerificationTimeout(Exception):
@@ -1950,1057 +1895,6 @@ class ChatGPTBot:
                 callback_server.close()
                 await callback_server.wait_closed()
 
-    async def execute_gopay_payment(self) -> str:
-        """调用 ChatGPT payments/checkout API 创建 ID/IDR Stripe Checkout，返回 Stripe hosted URL"""
-        logger.info("执行 GoPay 支付流程...")
-
-        token = await self.get_access_token()
-
-        payload = {
-            "plan_name": SUBSCRIPTION_PLAN_NAME,
-            "billing_details": {
-                "country": SUBSCRIPTION_BILLING_COUNTRY,
-                "currency": SUBSCRIPTION_CURRENCY,
-            },
-            "cancel_url": SUBSCRIPTION_CANCEL_URL,
-            "promo_campaign": {
-                "promo_campaign_id": SUBSCRIPTION_PROMO_CAMPAIGN_ID,
-                "is_coupon_from_query_param": False,
-            },
-            "checkout_ui_mode": "hosted",
-        }
-
-        checkout_url = await self.page.evaluate("""
-            async (args) => {
-                const resp = await fetch('https://chatgpt.com/backend-api/payments/checkout', {
-                    method: 'POST', credentials: 'include',
-                    headers: { Authorization: 'Bearer ' + args.token, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(args.payload),
-                });
-                const data = await resp.json().catch(() => null);
-                if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                return data?.url || data?.checkout_url || null;
-            }
-        """, {"token": token, "payload": payload})
-
-        if not checkout_url:
-            raise PaymentError("未获取到 Stripe Checkout URL")
-
-        logger.info(f"Stripe URL: {checkout_url}")
-        await screenshot(self.page, "step_09_before_checkout")
-        await self.page.goto(checkout_url)
-        await self._random_delay(2000, 4000)
-        return checkout_url
-
-    async def handle_stripe_checkout(self, whatsapp_callback) -> str:
-        """Stripe hosted checkout → Midtrans SNAP → GoPay 完整支付流程"""
-        logger.info("处理 Stripe Checkout → GoPay...")
-        if not self.page:
-            raise PaymentError("浏览器页面未初始化")
-        page = self.page
-        await screenshot(page, "step_10_stripe_checkout")
-
-        # 1. 选择 GoPay 并填账单地址（用注册时的姓名）
-        await self._fill_gopay_stripe_form(self.registration_name or DEFAULT_NAME)
-        await screenshot(page, "step_11_gopay_selected")
-
-        # 2. 点击订阅 → 跳转到 Midtrans
-        # 关键：单一 force click 在某些场景下不会触发 Stripe React 处理函数
-        # 实测需要"模拟真实鼠标"（pointerdown/mousedown/mouseup/click）才能让 Stripe
-        # 的 hosted checkout 真正提交。下面用多策略：
-        #   A. page.mouse.click(x, y) 在按钮中心点击（最像真实用户）
-        #   B. locator.click(force=True) 兜底
-        #   C. JS dispatch click 兜底
-        # 每个策略后等几秒看 URL 是否跳转，跳了就停。
-        submit_url_before = page.url
-
-        async def _click_and_wait(strategy: str, action_coro) -> bool:
-            try:
-                await action_coro
-                logger.info(f"已点击订阅按钮（{strategy}）")
-            except Exception as e:
-                logger.warning(f"订阅按钮 {strategy} 失败: {e}")
-                return False
-            # 等最多 12 秒看是否开始跳转（pay.openai.com → midtrans 中间会经过 stripe redirect）
-            try:
-                await page.wait_for_url(
-                    lambda u: "pay.openai.com" not in u or "midtrans" in u,
-                    timeout=12000,
-                )
-                return True
-            except Exception:
-                return page.url != submit_url_before
-
-        submit = page.locator('[data-testid="hosted-payment-submit-button"]').first
-        try:
-            await submit.scroll_into_view_if_needed(timeout=3000)
-        except Exception:
-            pass
-
-        navigated = False
-        # 策略 A: 真实鼠标坐标点击
-        try:
-            box = await submit.bounding_box()
-            if box:
-                navigated = await _click_and_wait(
-                    "mouse-coord",
-                    page.mouse.click(
-                        box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
-                    ),
-                )
-        except Exception as e:
-            logger.warning(f"获取订阅按钮 bounding_box 失败: {e}")
-
-        # 策略 B: force click
-        if not navigated:
-            navigated = await _click_and_wait(
-                "force-click", submit.click(force=True, timeout=10000)
-            )
-
-        # 策略 C: JS dispatch click + form.requestSubmit
-        if not navigated:
-            navigated = await _click_and_wait(
-                "js-click",
-                page.evaluate(
-                    """
-                    () => {
-                        const btn = document.querySelector('[data-testid="hosted-payment-submit-button"]');
-                        if (btn) btn.click();
-                        const form = btn && btn.closest('form');
-                        if (form && form.requestSubmit) form.requestSubmit();
-                    }
-                    """
-                ),
-            )
-
-        if not navigated:
-            logger.warning("3 种策略后仍未跳转，继续等待 60s...")
-
-        if not await self._wait_for_midtrans_redirect(timeout=30):
-            await screenshot(page, "step_12_midtrans_timeout")
-            await log_page_state(page, "等待 Midtrans 超时")
-            return "midtrans_redirect_timeout"
-
-        await screenshot(page, "step_12_midtrans")
-
-        # 3. 处理 Midtrans GoPay 页面
-        current_url = page.url
-        if "midtrans.com" in current_url:
-            return await self._handle_midtrans_gopay(whatsapp_callback)
-
-        return "unknown_state"
-
-    async def _wait_for_midtrans_redirect(self, timeout: int = 30) -> bool:
-        """等待 Stripe 提交后跳转到 Midtrans，遇到表单错误时提前返回。"""
-        if not self.page:
-            raise PaymentError("浏览器页面未初始化")
-        page = self.page
-        logger.info(f"等待跳转到 Midtrans... (timeout={timeout}s)")
-        deadline = time.time() + timeout
-        last_url = ""
-        last_log_time = 0.0
-        error_pattern = re.compile(
-            r"(required|invalid|declined|failed|error|can't|cannot|missing|必填|无效|错误|失败|无法|缺少)",
-            re.IGNORECASE,
-        )
-
-        while time.time() < deadline:
-            current_url = page.url or ""
-            if "midtrans.com" in current_url:
-                logger.info(f"✅ 已跳转到 Midtrans: {current_url[:160]}")
-                return True
-
-            now = time.time()
-            if current_url != last_url or now - last_log_time >= 5:
-                logger.info(f"等待 Midtrans 中，当前 URL: {current_url[:160]}")
-                last_url = current_url
-                last_log_time = now
-
-                try:
-                    diagnostics = await page.evaluate(
-                        """
-                        () => {
-                            const visible = (el) => {
-                                const r = el.getBoundingClientRect();
-                                const style = window.getComputedStyle(el);
-                                return r.width > 0 && r.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
-                            };
-                            const nodes = Array.from(document.querySelectorAll(
-                                '[role="alert"], [aria-live], [data-testid*="error" i], .error, .Error, .text-danger'
-                            ));
-                            const alerts = nodes
-                                .filter(visible)
-                                .map((el) => (el.innerText || el.textContent || '').trim())
-                                .filter(Boolean)
-                                .slice(0, 5);
-                            const submit = document.querySelector('[data-testid="hosted-payment-submit-button"]');
-                            return {
-                                alerts,
-                                submitDisabled: !!(submit && (submit.disabled || submit.getAttribute('aria-disabled') === 'true')),
-                                title: document.title || '',
-                            };
-                        }
-                        """
-                    )
-                    alerts = diagnostics.get("alerts") or []
-                    matched_alerts = [text for text in alerts if error_pattern.search(text)]
-                    if matched_alerts:
-                        logger.error(f"Stripe 表单错误，停止等待 Midtrans: {matched_alerts}")
-                        return False
-                    if diagnostics.get("submitDisabled"):
-                        logger.warning("Stripe 订阅按钮仍处于不可用状态，可能有必填项未通过校验")
-                except Exception as e:
-                    logger.warning(f"读取 Stripe 跳转诊断失败: {e}")
-
-            await asyncio.sleep(1)
-
-        logger.warning(f"等待 Midtrans 超时 {timeout}s，当前 URL: {(page.url or '')[:160]}")
-        return False
-
-    async def _fill_gopay_stripe_form(self, billing_name: str = None):
-        """在 Stripe hosted checkout 选择 GoPay 并填账单地址。
-        关键：GoPay 的 radio 被 accordion 按钮的 expandedClickArea 子层遮挡，
-        Playwright 标准 click 会失败，必须用 page.mouse.click(x, y) 在 radio
-        的几何坐标上点击；表单字段则用 JS setter 触发 React 状态更新。
-        billing_name: 填到 Stripe 账单姓名字段，应该用 about-you 时填的注册姓名。
-        """
-        if billing_name is None:
-            billing_name = DEFAULT_NAME
-        # 等表单完全渲染
-        await self._random_delay(1500, 2500)
-
-        # 1. 用真实鼠标坐标点击 GoPay radio（绕过遮挡）
-        gopay_selected = False
-        try:
-            radio = self.page.locator('input[type="radio"][value="gopay"]').first
-            await radio.scroll_into_view_if_needed(timeout=5000)
-            await self._random_delay(300, 600)
-            box = await radio.bounding_box()
-            if box:
-                await self.page.mouse.click(
-                    box["x"] + box["width"] / 2,
-                    box["y"] + box["height"] / 2,
-                )
-                await self._random_delay(400, 800)
-                gopay_selected = await radio.is_checked()
-                logger.info(f"GoPay radio 已选中: {gopay_selected}")
-        except Exception as e:
-            logger.warning(f"鼠标坐标点击 GoPay 失败: {e}")
-
-        # 兜底：直接 JS 触发 click
-        if not gopay_selected:
-            try:
-                gopay_selected = await self.page.evaluate("""
-                    () => {
-                        const r = document.querySelector('input[type="radio"][value="gopay"]');
-                        if (!r) return false;
-                        r.click();
-                        return r.checked;
-                    }
-                """)
-                logger.info(f"JS 兜底点击 GoPay: {gopay_selected}")
-            except Exception as e:
-                logger.warning(f"JS 兜底失败: {e}")
-
-        if not gopay_selected:
-            raise PaymentError("无法选中 GoPay 支付方式")
-
-        await self._random_delay(800, 1500)
-
-        # 2. 点 "手动输入地址"，让 Stripe 显示完整 line1/city/zip 输入框
-        try:
-            manual_btn = self.page.get_by_role(
-                "button", name=re.compile(r"(手动输入|manual)", re.IGNORECASE)
-            )
-            if await manual_btn.is_visible(timeout=3000):
-                await manual_btn.click()
-                await self._random_delay(500, 1000)
-                logger.info("已切换到手动输入地址")
-        except Exception:
-            logger.info("手动输入地址按钮不可见（可能默认就是手动模式）")
-
-        # 3. 用 JS setter 填字段，确保触发 React onChange
-        fill_result = await self.page.evaluate(
-            """
-            (billingName) => {
-                const setReact = (el, value) => {
-                    const proto = el instanceof HTMLSelectElement
-                        ? HTMLSelectElement.prototype
-                        : HTMLInputElement.prototype;
-                    const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
-                    setter.call(el, value);
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                    el.dispatchEvent(new Event('change', { bubbles: true }));
-                };
-                const fields = {
-                    billingName: billingName,
-                    billingAddressLine1: '574 East Avenue 28',
-                    billingLocality: 'Los Angeles',
-                    billingPostalCode: '90031',
-                };
-                const result = {};
-                for (const [name, val] of Object.entries(fields)) {
-                    const el = document.querySelector(`input[name="${name}"]`);
-                    if (el) { setReact(el, val); result[name] = el.value; }
-                    else { result[name] = '<missing>'; }
-                }
-                const stateSel = document.querySelector('select[name="billingAdministrativeArea"]');
-                if (stateSel) {
-                    const opt = Array.from(stateSel.options).find(
-                        o => o.text === 'California' || o.value === 'CA'
-                    );
-                    if (opt) { setReact(stateSel, opt.value); result.state = stateSel.value; }
-                }
-                const cb = document.querySelector('input[name="termsOfServiceConsentCheckbox"]');
-                if (cb && !cb.checked) cb.click();
-                result.termsChecked = !!(cb && cb.checked);
-                return result;
-            }
-            """,
-            billing_name,
-        )
-        logger.info(f"账单字段填写结果: {fill_result}")
-
-        # 4. 校验 name 字段已填（最关键的必填项之一）
-        if fill_result.get("billingName") != billing_name:
-            raise PaymentError(f"账单姓名未能正确填写: {fill_result}")
-
-    async def _click_gopay_binding_consent_if_visible(self) -> bool:
-        """点击 GoPay 绑定确认页的 Hubungkan/Connect 按钮。"""
-        before_url = self.page.url
-
-        def visible_surfaces():
-            surfaces = [(self.page, "page")]
-            for idx, frame in enumerate(self.page.frames):
-                if frame is self.page.main_frame:
-                    continue
-                surfaces.append((frame, f"frame#{idx}:{(frame.url or '')[:80]}"))
-            return surfaces
-
-        async def wait_for_transition(label: str) -> bool:
-            deadline = time.time() + 12
-            while time.time() < deadline:
-                await asyncio.sleep(1)
-                current_url = self.page.url or ""
-                try:
-                    page_text = await self.page.evaluate("() => document.body?.innerText || ''")
-                except Exception:
-                    page_text = ""
-                frame_states = []
-                for frame in self.page.frames:
-                    try:
-                        frame_text = await frame.evaluate("() => document.body?.innerText || ''")
-                    except Exception:
-                        frame_text = ""
-                    frame_states.append((frame.url or "", frame_text))
-
-                if "linking/otp" in current_url or "pin-web-client" in current_url:
-                    logger.info(f"GoPay 绑定确认点击后已进入 OTP 页: {label}")
-                    return True
-                if "Masukkin OTP" in page_text or ("OTP" in page_text and ("WhatsApp" in page_text or "SMS" in page_text)):
-                    logger.info(f"GoPay 绑定确认点击后已出现 OTP 文本: {label}")
-                    return True
-                for frame_url, frame_text in frame_states:
-                    if "linking/otp" in frame_url or "pin-web-client" in frame_url:
-                        logger.info(f"GoPay 绑定确认点击后 frame 已进入 OTP 页: {label} -> {frame_url[:120]}")
-                        return True
-                    if "Masukkin OTP" in frame_text or ("OTP" in frame_text and ("WhatsApp" in frame_text or "SMS" in frame_text)):
-                        logger.info(f"GoPay 绑定确认点击后 frame 已出现 OTP 文本: {label}")
-                        return True
-                if current_url != before_url and "Hubungkan GoPay" not in page_text and "Hubungkan" not in page_text:
-                    logger.info(f"GoPay 绑定确认点击后页面已跳转: {label} -> {current_url[:120]}")
-                    return True
-            logger.warning(f"GoPay 绑定确认点击后未观察到 OTP/跳转: {label}")
-            return False
-
-        css_candidates = [
-            ('[data-testid="consent-page"] [data-testid="consent-button"]', "consent-page-consent-button"),
-            ('button[data-testid="consent-button"]', "button-consent-button"),
-            ('[data-testid="consent-button"]', "consent-button"),
-        ]
-        scan_deadline = time.time() + 15
-        scan_round = 0
-        while time.time() < scan_deadline:
-            surfaces = visible_surfaces()
-            if scan_round == 0 or scan_round % 5 == 0:
-                labels = ", ".join(label for _, label in surfaces)
-                logger.info(f"GoPay 绑定确认页扫描 surfaces: {len(surfaces)} [{labels}]")
-            scan_round += 1
-            for surface, surface_label in surfaces:
-                for selector, label in css_candidates:
-                    full_label = f"{surface_label}:{label}"
-                    try:
-                        target = surface.locator(selector).first
-                        if not await target.is_visible(timeout=500):
-                            continue
-                        await target.scroll_into_view_if_needed(timeout=3000)
-                        box = await target.bounding_box()
-                        if box:
-                            await self.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-                            await self.page.mouse.down()
-                            await asyncio.sleep(0.08)
-                            await self.page.mouse.up()
-                            logger.info(f"已用真实鼠标点击 GoPay 绑定确认按钮: {full_label}")
-                            if await wait_for_transition(f"mouse:{full_label}"):
-                                return True
-
-                        await target.click(timeout=5000)
-                        logger.info(f"已用 locator 点击 GoPay 绑定确认按钮: {full_label}")
-                        if await wait_for_transition(f"locator:{full_label}"):
-                            return True
-
-                        await target.click(force=True, timeout=5000)
-                        logger.info(f"已用 force locator 点击 GoPay 绑定确认按钮: {full_label}")
-                        if await wait_for_transition(f"force:{full_label}"):
-                            return True
-                        logger.info(f"GoPay 绑定确认 locator 策略未确认跳转，继续尝试兜底策略: {full_label}")
-                    except Exception as e:
-                        logger.warning(f"GoPay 绑定确认按钮点击策略失败 ({full_label}): {e}")
-                        continue
-            await asyncio.sleep(0.5)
-
-        consent_text_pattern = re.compile(r"^\s*(Hubungkan|Connect|Link|Continue|Lanjut)\s*$", re.IGNORECASE)
-        for surface, surface_label in visible_surfaces():
-            text_candidates = [
-                ("role-button-consent", lambda s=surface: s.get_by_role("button", name=consent_text_pattern).first),
-                ("text-hubungkan", lambda s=surface: s.get_by_text(consent_text_pattern).last),
-            ]
-            for label, locator_factory in text_candidates:
-                full_label = f"{surface_label}:{label}"
-                try:
-                    target = locator_factory()
-                    if not await target.is_visible(timeout=800):
-                        continue
-                    await target.scroll_into_view_if_needed(timeout=3000)
-                    box = await target.bounding_box()
-                    if box:
-                        await self.page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-                    else:
-                        await target.click(timeout=5000)
-                    logger.info(f"已按文本点击 GoPay 绑定确认按钮: {full_label}")
-                    if await wait_for_transition(f"text:{full_label}"):
-                        return True
-                    logger.info(f"GoPay 绑定确认文本策略未确认跳转，继续尝试兜底策略: {full_label}")
-                except Exception as e:
-                    logger.warning(f"GoPay 绑定确认文本点击失败 ({full_label}): {e}")
-                    continue
-
-        try:
-            button_box = await self.page.evaluate(
-                """
-                () => {
-                    const visible = (el) => {
-                        const r = el.getBoundingClientRect();
-                        const s = window.getComputedStyle(el);
-                        return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
-                    };
-                    const exactText = (el) => (el.innerText || el.textContent || el.getAttribute('aria-label') || '').trim();
-                    const candidates = [
-                        document.querySelector('[data-testid="consent-page"] [data-testid="consent-button"]'),
-                        document.querySelector('button[data-testid="consent-button"]'),
-                        document.querySelector('[data-testid="consent-button"]'),
-                        ...Array.from(document.querySelectorAll('[data-testid="consent-page"] button, button, [role="button"]'))
-                            .filter((el) => /^(Hubungkan|Connect|Link|Continue|Lanjut)$/i.test(exactText(el))),
-                    ].filter(Boolean);
-                    const btn = candidates.find((el) => visible(el) && !el.disabled);
-                    if (!btn) return null;
-                    btn.scrollIntoView({ block: 'center', inline: 'center' });
-                    const r = btn.getBoundingClientRect();
-                    return { x: r.left + r.width / 2, y: r.top + r.height / 2, text: exactText(btn) };
-                }
-                """
-            )
-            if button_box:
-                await self.page.mouse.click(button_box["x"], button_box["y"])
-                logger.info(f"已通过 JS 定位 + 真实鼠标点击 GoPay 绑定确认按钮: {button_box.get('text', '')}")
-                if await wait_for_transition("js-box-mouse"):
-                    return True
-        except Exception as e:
-            logger.warning(f"JS 定位 GoPay 绑定确认按钮失败: {e}")
-
-        try:
-            clicked = await self.page.evaluate(
-                """
-                () => {
-                    const visible = (el) => {
-                        const r = el.getBoundingClientRect();
-                        const s = window.getComputedStyle(el);
-                        return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
-                    };
-                    const exactText = (el) => (el.innerText || el.textContent || el.getAttribute('aria-label') || '').trim();
-                    const btn = [
-                        document.querySelector('[data-testid="consent-page"] [data-testid="consent-button"]'),
-                        document.querySelector('button[data-testid="consent-button"]'),
-                        document.querySelector('[data-testid="consent-button"]'),
-                        ...Array.from(document.querySelectorAll('[data-testid="consent-page"] button, button, [role="button"]'))
-                            .filter((el) => /^(Hubungkan|Connect|Link|Continue|Lanjut)$/i.test(exactText(el))),
-                    ].filter(Boolean).find((el) => visible(el) && !el.disabled);
-                    if (!btn) return false;
-                    btn.scrollIntoView({ block: 'center', inline: 'center' });
-                    const opts = { bubbles: true, cancelable: true, composed: true, view: window };
-                    for (const type of ['pointerover', 'mouseover', 'pointermove', 'mousemove', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-                        btn.dispatchEvent(new MouseEvent(type, opts));
-                    }
-                    return true;
-                }
-                """
-            )
-            if clicked:
-                logger.info("已通过 JS pointer/mouse 事件点击 GoPay 绑定确认按钮")
-                if await wait_for_transition("js-events"):
-                    return True
-        except Exception as e:
-            logger.warning(f"JS 点击 GoPay 绑定确认按钮失败: {e}")
-
-        try:
-            await self.page.keyboard.press("Enter")
-            logger.info("已尝试 Enter 触发 GoPay 绑定确认按钮")
-            if await wait_for_transition("keyboard-enter"):
-                return True
-        except Exception as e:
-            logger.warning(f"Enter 触发 GoPay 绑定确认按钮失败: {e}")
-
-        return False
-
-    async def _click_gopay_resend_sms_if_visible(self) -> bool:
-        """点击 GoPay OTP 页的 Kirim ulang via SMS 重新发送按钮。"""
-        resend_pattern = re.compile(
-            r"(kirim\s+ulan[gd](?:\s+via\s+sms)?|resend(?:\s+code)?(?:\s+via\s+sms)?|send.*sms)",
-            re.IGNORECASE,
-        )
-        surfaces = [(self.page, "page")]
-        for idx, frame in enumerate(self.page.frames):
-            if frame is self.page.main_frame:
-                continue
-            surfaces.append((frame, f"frame#{idx}:{(frame.url or '')[:80]}"))
-
-        for surface, surface_label in surfaces:
-            candidates = [
-                ("role-button-resend-sms", lambda s=surface: s.get_by_role("button", name=resend_pattern).first),
-                ("text-resend-sms", lambda s=surface: s.get_by_text(resend_pattern).first),
-            ]
-            for label, locator_factory in candidates:
-                full_label = f"{surface_label}:{label}"
-                try:
-                    target = locator_factory()
-                    if await target.is_visible(timeout=800):
-                        await target.click(timeout=5000)
-                        logger.info(f"已点击 GoPay OTP 重新发送短信按钮: {full_label}")
-                        await self._random_delay(1500, 2500)
-                        return True
-                except Exception:
-                    continue
-
-        try:
-            for surface, surface_label in surfaces:
-                try:
-                    clicked = await surface.evaluate(
-                    """
-                    () => {
-                        const visible = (el) => {
-                            const r = el.getBoundingClientRect();
-                            const s = window.getComputedStyle(el);
-                            return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
-                        };
-                        const nodes = Array.from(document.querySelectorAll('button, [role="button"], a, span, div'));
-                        const matched = nodes.find((el) => {
-                            const text = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').trim();
-                            return visible(el) && text.length <= 80 && /kirim\\s+ulan[gd](?:\\s+via\\s+sms)?|resend(?:\\s+code)?(?:\\s+via\\s+sms)?|send.*sms/i.test(text);
-                        });
-                        const target = matched && (matched.closest('button, [role="button"], a') || matched);
-                        if (!target) return false;
-                        target.click();
-                        return true;
-                    }
-                    """
-                    )
-                    if clicked:
-                        logger.info(f"已通过 JS 点击 GoPay OTP 重新发送短信按钮: {surface_label}")
-                        await self._random_delay(1500, 2500)
-                        return True
-                except Exception:
-                    continue
-        except Exception as e:
-            logger.warning(f"JS 点击 GoPay OTP 重新发送短信按钮失败: {e}")
-
-        return False
-
-    async def _handle_midtrans_gopay(self, whatsapp_callback) -> str:
-        """Midtrans SNAP → GoPay account linking → 真实付款.
-
-        流程（MCP 抓包验证过）：
-            1. 在 linking 页：点 .phone-code-wrapper → 按 GOPAY_COUNTRY_CODE 选国家码 → 填手机号 → Link and pay
-            2. 可能直接进入 Hubungkan 绑定确认页，也可能遇到 technical error 风控（429）
-            3. 风控时走绕过：POST /snap/v3/accounts/{txn}/linking 不带 Authorization → 201 activation_link_url
-            4. 打开 activation_link 或正常确认页 → 点 Hubungkan → OTP → PIN
-            5. 自动跳回 Midtrans pay 页 → 点 Pay now → iframe 内 Bayar → iframe 内 PIN
-            6. 成功后 Stripe 跳回 chatgpt.com
-        """
-        logger.info("Midtrans GoPay 流程...")
-        midtrans_url = self.page.url  # 保存原 linking URL，bypass 后回到这里继续付款
-        await screenshot(self.page, "step_13_midtrans_linking")
-
-        # Step A: 按配置切国家码 + 填手机号
-        try:
-            await self.page.wait_for_selector(".phone-code-wrapper", timeout=15000)
-            await self._random_delay(500, 1000)
-            country_option = GOPAY_COUNTRY_OPTIONS.get(GOPAY_COUNTRY_CODE)
-            if not country_option:
-                raise PaymentError(f"不支持的 GoPay 国家码: +{GOPAY_COUNTRY_CODE}")
-            country_trigger = self.page.locator(".phone-code-wrapper").first
-            await country_trigger.click(timeout=5000)
-            await self._random_delay(400, 800)
-            country = self.page.get_by_text(country_option, exact=True).first
-            await country.scroll_into_view_if_needed(timeout=3000)
-            await country.click(timeout=5000)
-            await self._random_delay(300, 500)
-
-            phone_input = self.page.get_by_role("textbox").first
-            await phone_input.fill(GOPAY_PHONE)
-            logger.info(f"已选择 GoPay 国家码: {country_option}")
-            logger.info(f"已填写 GoPay 手机号: +{GOPAY_COUNTRY_CODE} {GOPAY_PHONE}")
-        except Exception as e:
-            logger.warning(f"国家切换/手机号填写异常: {e}")
-
-        # 点 Link and pay
-        try:
-            link_btn = self.page.get_by_role(
-                "button", name=re.compile(r"link\s*and\s*pay", re.IGNORECASE)
-            ).first
-            await link_btn.click(timeout=5000)
-            logger.info("已点击 Link and pay")
-        except Exception as e:
-            logger.warning(f"点击 Link and pay 异常: {e}")
-
-        # 等待 Link and pay 后进入风控错误或绑定确认页。
-        await self._random_delay(2500, 3500)
-
-        # Step B: 检测风控并走 bypass；正常路径则直接点击 Hubungkan 绑定确认。
-        page_text = await self.page.evaluate("() => document.body.innerText")
-        if any(k in page_text for k in ("technical error", "Technical error", "too many", "Too many")):
-            logger.info("检测到 GoPay 风控（429），走 bypass...")
-            ok = await self._bypass_gopay_ratelimit()
-            if not ok:
-                logger.error("GoPay bypass 失败")
-                return "bypass_failed"
-            await screenshot(self.page, "step_14_after_bypass")
-        elif await self._click_gopay_binding_consent_if_visible():
-            await screenshot(self.page, "step_14_after_gopay_consent")
-
-        # Step C: 等待 OTP 输入页（pin-web-client.gopayapi.com / linking/otp）并要求用户输入 OTP
-        otp_inputted = False
-        pin_inputted = False
-        navigated_back = False  # 是否已从 callback 页跳回原 Midtrans linking URL
-        otp_page_first_seen_at = 0.0
-        resend_sms_clicked = False
-        otp_task = None
-
-        async def request_otp_once() -> Optional[str]:
-            if not whatsapp_callback:
-                return None
-            try:
-                return await whatsapp_callback(timeout=20)
-            except TypeError:
-                return await whatsapp_callback()
-
-        def cancel_otp_task() -> None:
-            if otp_task and not otp_task.done():
-                otp_task.cancel()
-
-        async def collect_gopay_frame_states() -> list[dict[str, str]]:
-            states = []
-            for idx, frame in enumerate(self.page.frames):
-                if frame is self.page.main_frame:
-                    continue
-                try:
-                    frame_text = await frame.evaluate("() => document.body?.innerText || ''")
-                except Exception:
-                    frame_text = ""
-                states.append({"label": f"frame#{idx}", "url": frame.url or "", "text": frame_text})
-            return states
-
-        def is_otp_state(current_url: str, page_text: str, frame_states: list[dict[str, str]]) -> tuple[bool, str]:
-            if "linking/otp" in current_url:
-                return True, current_url[:120]
-            if "Masukkin OTP" in page_text or ("OTP" in page_text and ("WhatsApp" in page_text or "SMS" in page_text)):
-                return True, "top-page-text"
-            for state in frame_states:
-                frame_url = state["url"]
-                frame_text = state["text"]
-                if "linking/otp" in frame_url:
-                    return True, f"{state['label']}:{frame_url[:120]}"
-                if "Masukkin OTP" in frame_text or ("OTP" in frame_text and ("WhatsApp" in frame_text or "SMS" in frame_text)):
-                    return True, f"{state['label']}:text"
-            return False, ""
-
-        def is_binding_pin_state(current_url: str, page_text: str, frame_states: list[dict[str, str]]) -> tuple[bool, str]:
-            pin_text_pattern = re.compile(r"(ketik\s+6\s+digit\s+PIN|Masukkin\s+PIN|\bPIN\b.*GoPay|6\s+digit.*PIN)", re.IGNORECASE)
-            if "pin-web-client" in current_url and pin_text_pattern.search(page_text):
-                return True, current_url[:120]
-            for state in frame_states:
-                if "pin-web-client" in state["url"] and pin_text_pattern.search(state["text"]):
-                    return True, f"{state['label']}:{state['url'][:120]}"
-            return False, ""
-
-        for poll in range(180):  # 最多等 6 分钟
-            await asyncio.sleep(2)
-            current = self.page.url
-
-            # 成功条件
-            if (
-                "payments/success" in current
-                or "chatgpt.com/payments/success" in current
-                or current.rstrip("/").endswith("chatgpt.com")
-            ):
-                logger.info("✅ GoPay 支付成功，已跳回 chatgpt.com")
-                cancel_otp_task()
-                return "success"
-
-            # 关键：PIN 通过后会跳到 midtrans 的 linking callback URL（页面空白），
-            # 需要主动导航回原 linking URL 才会自动进入 pay 阶段
-            if "/snap/v3/callback/gopay/linking" in current and not navigated_back:
-                logger.info("检测到 GoPay 绑定 callback，导航回原 Midtrans 链接继续付款...")
-                try:
-                    await self.page.goto(midtrans_url)
-                    navigated_back = True
-                    await self._random_delay(2000, 3000)
-                except Exception as e:
-                    logger.warning(f"导航回原链接失败: {e}")
-                continue
-
-            try:
-                page_text = await self.page.evaluate("() => document.body.innerText")
-            except Exception:
-                continue
-            frame_states = await collect_gopay_frame_states()
-            frame_text_joined = "\n".join(state["text"] for state in frame_states)
-
-            if "Hubungkan GoPay" in page_text or "Hubungkan" in page_text or "Hubungkan GoPay" in frame_text_joined or "Hubungkan" in frame_text_joined:
-                if await self._click_gopay_binding_consent_if_visible():
-                    continue
-
-            # OTP 页（WhatsApp）
-            otp_visible, otp_source = is_otp_state(current, page_text, frame_states)
-            if not otp_inputted and otp_visible:
-                if not otp_page_first_seen_at:
-                    otp_page_first_seen_at = time.time()
-                    logger.info(f"检测到 OTP 输入页面，开始等待验证码: {otp_source}")
-                    await screenshot(self.page, "step_15_otp_page")
-                if not resend_sms_clicked and time.time() - otp_page_first_seen_at >= 60:
-                    if await self._click_gopay_resend_sms_if_visible():
-                        resend_sms_clicked = True
-                        await screenshot(self.page, "step_15b_resend_sms_clicked")
-                    else:
-                        logger.info("OTP 页已等待 60s，暂未发现 Kirim ulang via SMS 按钮")
-                if whatsapp_callback and (not otp_task or otp_task.done()):
-                    if otp_task and otp_task.done():
-                        try:
-                            previous_otp = otp_task.result()
-                        except Exception as e:
-                            logger.warning(f"上一次 OTP 等待异常，继续等待: {e}")
-                            previous_otp = None
-                        if previous_otp:
-                            otp = previous_otp
-                        else:
-                            otp_task = asyncio.create_task(request_otp_once())
-                            logger.info("继续等待 GoPay OTP")
-                            continue
-                    else:
-                        otp_task = asyncio.create_task(request_otp_once())
-                        logger.info("已启动 GoPay OTP 等待任务")
-                        continue
-                elif otp_task and not otp_task.done():
-                    continue
-                else:
-                    otp = None
-                if otp:
-                    if await self._fill_pin_or_otp(otp):
-                        otp_inputted = True
-                        cancel_otp_task()
-                        logger.info(f"已填入 OTP: {otp[:2]}***")
-                        await self._random_delay(2500, 3500)
-                    else:
-                        logger.warning("已获取 GoPay OTP，但未找到可填入的 OTP 输入框，继续等待页面稳定")
-                continue
-
-            # 第一次 PIN 页（绑定 GoPay）—— 写死 GOPAY_PIN，无需用户输入
-            pin_visible, pin_source = is_binding_pin_state(current, page_text, frame_states)
-            if not pin_inputted and pin_visible:
-                logger.info(f"检测到 GoPay PIN 输入页面（绑定阶段），自动填入预设 PIN: {pin_source}")
-                await screenshot(self.page, "step_16_pin_page")
-                if await self._fill_pin_or_otp(GOPAY_PIN):
-                    pin_inputted = True
-                    logger.info(f"已填入 PIN: {GOPAY_PIN[:2]}***")
-                    await self._random_delay(3000, 4000)
-                else:
-                    logger.warning("检测到 GoPay PIN 页面，但未找到可填入的 PIN 输入框，继续等待页面稳定")
-                continue
-
-            # 回到 Midtrans pay 页（GoPay 已绑定，需要点 Pay now → iframe Bayar → iframe PIN）
-            if "gopay-tokenization/pay" in current or (
-                "midtrans" in current and "Pay now" in page_text
-            ):
-                cancel_otp_task()
-                if await self._handle_midtrans_pay_step(whatsapp_callback):
-                    return "success"
-
-        logger.warning("GoPay 流程超时")
-        await self._dump_midtrans_frames("gopay_flow_timeout")
-        cancel_otp_task()
-        return "timeout"
-
-    async def _fill_pin_or_otp(self, code: str) -> bool:
-        """OTP/PIN 输入：找第一个 input，点击聚焦，逐字符 keyboard.type 让它自动跳格。
-        支持顶层 page 和 iframe 内场景。"""
-        code = (code or "").strip()
-        if not code:
-            return False
-
-        # 先尝试顶层 page 的 pin-input-field（GoPay OTP/绑定 PIN 页用）
-        for locator in [
-            self.page.get_by_test_id("pin-input-field").first,
-            self.page.locator('input[type="tel"], input[type="text"], input[type="password"]').first,
-        ]:
-            try:
-                if await locator.is_visible(timeout=2000):
-                    await locator.click(timeout=3000)
-                    await self.page.keyboard.type(code, delay=80)
-                    return True
-            except Exception:
-                continue
-
-        # iframe 内（GoPay OTP / 绑定 PIN / Pay 阶段第二次 PIN）
-        try:
-            frames = self.page.frames
-            for fr in frames:
-                if fr is self.page.main_frame:
-                    continue
-                frame_candidates = [
-                    ("pin-input-field", fr.get_by_test_id("pin-input-field").first),
-                    ("one-time-code", fr.locator('input[autocomplete="one-time-code"]').first),
-                    ("numeric-input", fr.locator('input[inputmode="numeric"], input[type="tel"], input[type="text"], input[type="password"]').first),
-                    ("role-textbox", fr.get_by_role("textbox").first),
-                ]
-                for label, inp in frame_candidates:
-                    try:
-                        if await inp.is_visible(timeout=1000):
-                            await inp.click(timeout=3000)
-                            await self.page.keyboard.type(code, delay=80)
-                            logger.info(f"已在 frame 内填入 OTP/PIN: {label}, frame={fr.url[:120]}")
-                            return True
-                    except Exception:
-                        continue
-        except Exception:
-            pass
-        return False
-
-    async def _dump_midtrans_frames(self, reason: str) -> None:
-        """输出 Midtrans iframe 状态，便于定位按钮选择器或页面状态变化。"""
-        logger.warning(f"Midtrans iframe 诊断: {reason}")
-        logger.warning(f"主页面 URL: {self.page.url[:200]}")
-        try:
-            body_text = await self.page.evaluate("() => document.body?.innerText?.substring(0, 800) || ''")
-            logger.warning(f"主页面文本: {body_text}")
-        except Exception as e:
-            logger.warning(f"读取主页面文本失败: {e}")
-
-        for idx, fr in enumerate(self.page.frames):
-            if fr is self.page.main_frame:
-                continue
-            try:
-                frame_info = await fr.evaluate(
-                    """
-                    () => {
-                        const visible = (el) => {
-                            const r = el.getBoundingClientRect();
-                            return r.width > 0 && r.height > 0;
-                        };
-                        const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"]'))
-                            .filter(visible)
-                            .slice(0, 20)
-                            .map((el) => ({
-                                tag: el.tagName,
-                                text: (el.innerText || el.value || el.getAttribute('aria-label') || '').trim().slice(0, 80),
-                                testid: el.getAttribute('data-testid') || '',
-                                disabled: !!el.disabled || el.getAttribute('aria-disabled') === 'true',
-                            }));
-                        return {
-                            title: document.title || '',
-                            body: (document.body?.innerText || '').trim().slice(0, 800),
-                            buttons,
-                        };
-                    }
-                    """
-                )
-                logger.warning(
-                    f"iframe[{idx}] url={fr.url[:200]} title={frame_info.get('title', '')!r} "
-                    f"buttons={frame_info.get('buttons', [])} body={frame_info.get('body', '')!r}"
-                )
-            except Exception as e:
-                logger.warning(f"iframe[{idx}] url={fr.url[:200]} 诊断失败: {e}")
-
-        await screenshot(self.page, f"midtrans_frame_debug_{reason[:30]}")
-
-    async def _click_midtrans_bayar_button(self, timeout: int = 30000) -> bool:
-        """在所有 iframe 内等待并点击 Midtrans 的付款确认按钮。"""
-        deadline = time.time() + timeout / 1000
-        text_pattern = re.compile(r"^(Bayar|Pay|Pay now|Confirm|Lanjut|Continue|Submit|付款|支付|确认|继续)$", re.IGNORECASE)
-
-        while time.time() < deadline:
-            for fr in self.page.frames:
-                if fr is self.page.main_frame:
-                    continue
-
-                candidates = [
-                    ("data-testid=pay-button", lambda frame: frame.get_by_test_id("pay-button").first),
-                    ("role button pay text", lambda frame: frame.get_by_role("button", name=text_pattern).first),
-                    (
-                        "button text fallback",
-                        lambda frame: frame.locator(
-                            "button, [role='button'], input[type='button'], input[type='submit']"
-                        ).filter(has_text=text_pattern).first,
-                    ),
-                ]
-
-                for label, locator_factory in candidates:
-                    try:
-                        btn = locator_factory(fr)
-                        if not await btn.is_visible(timeout=700):
-                            continue
-                        if not await btn.is_enabled(timeout=700):
-                            logger.info(f"iframe 内付款按钮暂不可用: {label}, frame={fr.url[:100]}")
-                            continue
-                        await btn.click(timeout=5000)
-                        logger.info(f"已点击 iframe 内付款按钮: {label}, frame={fr.url[:120]}")
-                        return True
-                    except Exception:
-                        continue
-
-            await asyncio.sleep(1)
-
-        await self._dump_midtrans_frames("pay_button_missing")
-        return False
-
-    async def _handle_midtrans_pay_step(self, whatsapp_callback) -> bool:
-        """Pay now → iframe Bayar → iframe PIN → 成功跳回 chatgpt.com.
-        返回 True 表示已完成（已跳回 chatgpt.com 或检测到 success）。"""
-        # 点 Pay now
-        try:
-            pay_now = self.page.get_by_role(
-                "button", name=re.compile(r"pay\s*now", re.IGNORECASE)
-            ).first
-            if await pay_now.is_visible(timeout=2000):
-                await pay_now.click()
-                logger.info("已点击 Pay now")
-                await self._random_delay(2000, 3000)
-        except Exception as e:
-            logger.warning(f"点击 Pay now 异常: {e}")
-
-        # 等 3DS iframe 出现
-        try:
-            await self.page.wait_for_selector("iframe", timeout=10000)
-        except Exception as e:
-            logger.warning(f"等待 Midtrans iframe 超时: {e}")
-            await self._dump_midtrans_frames("iframe_missing")
-            return False
-
-        if not await self._click_midtrans_bayar_button(timeout=30000):
-            logger.warning("未找到 iframe 内的付款确认按钮")
-            return False
-
-        await self._random_delay(2500, 4000)
-
-        # iframe 内会出现 PIN 输入框（Masukkin PIN GoPay）
-        for _ in range(15):
-            await asyncio.sleep(2)
-            current = self.page.url
-            if "payments/success" in current or current.rstrip("/").endswith("chatgpt.com"):
-                logger.info("✅ 已跳回 chatgpt.com，付款完成")
-                return True
-
-            # 检测 iframe 内 PIN 输入框
-            for fr in self.page.frames:
-                if fr is self.page.main_frame:
-                    continue
-                try:
-                    pin_input = fr.get_by_test_id("pin-input-field").first
-                    if await pin_input.is_visible(timeout=1500):
-                        logger.info("检测到 iframe 内的 PIN 页面（付款确认），自动填入预设 PIN")
-                        await screenshot(self.page, "step_17_iframe_pin")
-                        await pin_input.click()
-                        await self.page.keyboard.type(GOPAY_PIN, delay=80)
-                        logger.info(f"已填入付款 PIN: {GOPAY_PIN[:2]}***")
-                        await self._random_delay(5000, 8000)
-                        break
-                except Exception:
-                    continue
-
-        # 最后再确认一次
-        if (
-            "payments/success" in self.page.url
-            or self.page.url.rstrip("/").endswith("chatgpt.com")
-        ):
-            return True
-        return False
-
-    async def _bypass_gopay_ratelimit(self) -> bool:
-        """GoPay 风控绕过：在浏览器上下文中 fetch /snap/v3/accounts/{txn}/linking 不带 Authorization，
-        拿 201 + activation_link_url，导航到该链接并点 Hubungkan。返回 True/False 表示是否成功进入 OTP 页。"""
-        match = re.search(r"redirection/([a-f0-9-]+)", self.page.url)
-        if not match:
-            logger.warning(f"无法从 URL 提取 Midtrans txn_id: {self.page.url}")
-            return False
-        txn_id = match.group(1)
-
-        # 在浏览器上下文里 fetch（无 Authorization）
-        try:
-            data = await self.page.evaluate(
-                """
-                async (args) => {
-                    const r = await fetch(`https://app.midtrans.com/snap/v3/accounts/${args.txn}/linking`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                        body: JSON.stringify({ type: 'gopay', country_code: args.cc, phone_number: args.phone }),
-                    });
-                    const t = await r.text();
-                    let d; try { d = JSON.parse(t); } catch { d = t; }
-                    return { status: r.status, data: d };
-                }
-                """,
-                {"txn": txn_id, "cc": GOPAY_COUNTRY_CODE, "phone": GOPAY_PHONE},
-            )
-        except Exception as e:
-            logger.warning(f"bypass fetch 失败: {e}")
-            return False
-
-        if data.get("status") != 201:
-            logger.warning(f"bypass 非 201: status={data.get('status')} data={data.get('data')}")
-            return False
-        link_url = (data.get("data") or {}).get("activation_link_url")
-        if not link_url:
-            logger.warning(f"bypass 返回缺失 activation_link_url: {data}")
-            return False
-
-        logger.info(f"GoPay 激活链接: {link_url}")
-        try:
-            await self.page.goto(link_url)
-        except Exception as e:
-            logger.warning(f"打开激活链接失败: {e}")
-            return False
-        await self._random_delay(2000, 3000)
-
-        # 点 Hubungkan（consent-button）
-        try:
-            connect_btn = self.page.get_by_test_id("consent-button").first
-            await connect_btn.click(timeout=10000)
-            logger.info("已点击 Hubungkan（同意绑定）")
-        except Exception as e:
-            logger.warning(f"点击 Hubungkan 失败: {e}")
-            return False
-
-        await self._random_delay(2000, 3500)
-        return True
-
     async def _click_confirm_button(self) -> bool:
         for sel in [
             self.page.get_by_role("button", name=re.compile(r"(Confirm|确认|Submit|Pay|Verify|验证)", re.IGNORECASE)),
@@ -3513,113 +2407,28 @@ class Sub2APIExporter:
         return cls.FILE
 
 
-# ===================== 5. WhatsApp OTP 处理器 =====================
-class WhatsAppOTPHandler:
-    @staticmethod
-    async def read_from_hero_sms(timeout: int = 120) -> Optional[str]:
-        """通过 HeroSMS 当前激活列表按 GoPay 手机号轮询 OTP。"""
-        if not HEROSMS_APIKEY:
-            return None
-
-        logger.info(
-            f"自动读取 HeroSMS GoPay OTP：phone=+{GOPAY_COUNTRY_CODE} {GOPAY_PHONE} "
-            f"timeout={timeout}s"
-        )
-        try:
-            client = HeroSMSClient(HEROSMS_APIKEY)
-            result = await client.poll_gopay_code_by_phone(
-                phone=GOPAY_PHONE,
-                timeout=timeout,
-                interval=HEROSMS_INTERVAL,
-                finish_after=HEROSMS_FINISH_AFTER,
-            )
-            return result.code
-        except HeroSMSError as e:
-            logger.warning(f"HeroSMS GoPay OTP 读取失败: {e}")
-            return None
-        except Exception as e:
-            logger.warning(f"HeroSMS GoPay OTP 读取异常: {e}")
-            return None
-
-    @staticmethod
-    async def read_from_whatsapp(timeout: int = 120) -> Optional[str]:
-        """从模拟器 WhatsApp 主列表轮询读取 GoPay OTP。"""
-        _ = timeout
-        logger.info("WhatsApp OTP 自动读取模块已移除，跳过该读取路径")
-        return None
-
-    @staticmethod
-    async def prompt_user_for_otp(timeout: int = 120) -> Optional[str]:
-        if GOPAY_OTP_CODE_FILE:
-            return await wait_for_code_file(GOPAY_OTP_CODE_FILE, "GoPay OTP", timeout=timeout)
-
-        hero_sms_otp = await WhatsAppOTPHandler.read_from_hero_sms(timeout=timeout)
-        if hero_sms_otp:
-            return hero_sms_otp
-
-        if WHATSAPP_OTP_AUTO_ENABLED:
-            otp = await WhatsAppOTPHandler.read_from_whatsapp(timeout=timeout)
-            if otp:
-                return otp
-            logger.warning("WhatsApp 自动读取未拿到 OTP，转入手动输入")
-
-        logger.info("=" * 60)
-        logger.info("等待 GoPay OTP - 请检查 WhatsApp/短信")
-        logger.info(f"请在 {timeout}s 内输入 OTP 验证码:")
-        logger.info("=" * 60)
-
-        loop = asyncio.get_running_loop()
-        try:
-            result = await asyncio.wait_for(
-                loop.run_in_executor(None, lambda: input("OTP > ").strip()),
-                timeout=timeout,
-            )
-            if result:
-                logger.info(f"收到 OTP: {result[:2]}...")
-                return result
-            return None
-        except asyncio.TimeoutError:
-            logger.warning("OTP 输入超时")
-            return None
-
-
-async def run_gopay_unlink_cleanup() -> str:
-    """全流程最后解绑 GoPay Linked apps，返回可打印的收尾状态。"""
-    logger.info("GoPay Linked apps 解绑模块已移除，跳过收尾")
-    return "已跳过"
-
-
-# ===================== 6. 主流程 =====================
+# ===================== 5. 主流程 =====================
 def _interactive_startup_menu() -> dict:
-    """无参数启动时的交互式菜单。
-    返回 {"manual_email": bool, "skip_payment": bool}。
-    合法组合：
-        1   = 自动邮箱后端，不付款（仅注册免费账号）
-        2   = 自己邮箱，不付款（仅注册免费账号）
-        13  = 自动邮箱后端 + GoPay 付款（默认）
-        23  = 自己邮箱 + GoPay 付款
-    """
+    """无参数启动时的交互式菜单，仅保留邮箱模式选择。"""
     print("=" * 60)
     print("ChatGPT 注册机 — 启动选项")
     print("=" * 60)
-    print("请输入选项编号（可组合，例如 13）：")
+    print("请输入选项编号：")
     print("  1 — 使用自动邮箱后端（自动收件 + 自动提取验证码）")
     print("  2 — 手动输入自己的邮箱（验证码自己看邮箱后粘贴）")
-    print("  3 — 进行 GoPay 付款订阅 Plus（不选则只注册免费账号）")
     print()
-    print("规则: 必须选 1 或 2 之一（邮箱模式互斥），3 可选")
-    print("有效组合: 1 / 2 / 13 / 23")
-    print("默认: 13（自动邮箱后端 + 付款）")
+    print("规则: 必须选 1 或 2 之一（邮箱模式互斥）")
+    print("默认: 1（自动邮箱后端 + 免费账号）")
     print("=" * 60)
 
     while True:
-        raw = input("请选择 [回车默认 13] > ").strip()
+        raw = input("请选择 [回车默认 1] > ").strip()
         if not raw:
-            raw = "13"
+            raw = "1"
         digits = set(c for c in raw if c.isdigit())
-        invalid = digits - {"1", "2", "3"}
+        invalid = digits - {"1", "2"}
         if invalid:
-            print(f"[!] 无效选项: {','.join(sorted(invalid))}，仅支持 1/2/3")
+            print(f"[!] 无效选项: {','.join(sorted(invalid))}，仅支持 1/2")
             continue
         if "1" in digits and "2" in digits:
             print("[!] 不能同时选 1 和 2（邮箱模式互斥）")
@@ -3627,20 +2436,15 @@ def _interactive_startup_menu() -> dict:
         if "1" not in digits and "2" not in digits:
             print("[!] 必须选 1 或 2 中的一个（邮箱模式必填）")
             continue
-        result = {
-            "manual_email": "2" in digits,
-            "skip_payment": "3" not in digits,
-        }
+        result = {"manual_email": "2" in digits}
         mode_email = "手动邮箱" if result["manual_email"] else "自动邮箱后端"
-        mode_pay = "跳过付款（仅免费账号）" if result["skip_payment"] else "GoPay 付款订阅 Plus"
-        print(f"\n>> 已选择: 邮箱={mode_email} | 支付={mode_pay}\n")
+        print(f"\n>> 已选择: 邮箱={mode_email} | 模式=免费账号\n")
         return result
 
 
 async def main():
-    global DEBUG_MODE, GOPAY_OTP_CODE_FILE, ANDROID_DEVICE_SERIAL, WHATSAPP_OTP_AUTO_ENABLED
-    global WHATSAPP_OTP_MAX_AGE_SECONDS, GOPAY_UNLINK_CLEANUP_ENABLED, HEROSMS_APIKEY
-    global HEROSMS_INTERVAL, HEROSMS_FINISH_AFTER, GOPAY_PHONE
+    global DEBUG_MODE, HEROSMS_APIKEY
+    global HEROSMS_INTERVAL, HEROSMS_FINISH_AFTER
 
     parser = argparse.ArgumentParser(description="ChatGPT 注册机")
     parser.add_argument("--headless", action="store_true", help="无头模式")
@@ -3649,22 +2453,15 @@ async def main():
     parser.add_argument("--name", type=str, default=DEFAULT_NAME, help="账号名称。保持默认时会随机生成英文姓名")
     parser.add_argument("--birthdate", type=str, default=None, help="生日 YYYY-MM-DD")
     parser.add_argument("--email-timeout", type=int, default=180, help="邮件等待超时(s)")
-    parser.add_argument("--skip-payment", action="store_true", help="跳过支付，仅注册免费账户")
     parser.add_argument("--debug", action="store_true", help="调试模式：出错时保持浏览器打开不关闭")
     parser.add_argument("--email", type=str, default=None, help="指定注册邮箱；配合 --jwt 时复用已有临时邮箱")
-    parser.add_argument("--resume-alias-email", type=str, default="", help="使用已有 OutlookEmailPlus 别名邮箱登录恢复，并继续 GoPay 流程")
+    parser.add_argument("--resume-alias-email", type=str, default="", help="使用已有 OutlookEmailPlus 别名邮箱登录恢复")
     parser.add_argument("--manual-email-base", type=str, default=None, help="自备邮箱母邮箱；未传 --email 时自动生成 +alias 注册邮箱")
     parser.add_argument("--email-code-file", type=str, default="", help="非交互式测试：等待该文件写入邮箱验证码")
-    parser.add_argument("--gopay-otp-file", type=str, default="", help="非交互式测试：等待该文件写入 GoPay OTP")
-    parser.add_argument("--gopay-phone", type=str, default="", help="覆盖 GoPay 手机号；只填手机号本体，不填国家码")
-    parser.add_argument("--herosms-apikey", type=str, default=HEROSMS_APIKEY, help="HeroSMS APIKEY；提供后按 GoPay 手机号匹配当前激活并自动读取 OTP")
+    parser.add_argument("--herosms-apikey", type=str, default=HEROSMS_APIKEY, help="HeroSMS API Key；提供后按手机号匹配当前激活并自动读取 OTP")
     parser.add_argument("--herosms-interval", type=int, default=HEROSMS_INTERVAL, help="HeroSMS 轮询间隔秒数")
     parser.add_argument("--herosms-finish", action="store_true", help="读取 HeroSMS 后调用 setStatus=6 完成激活；默认不调用，避免号码从激活列表消失")
     parser.add_argument("--no-herosms-finish", action="store_true", help="兼容旧参数：读取 HeroSMS 后不调用 setStatus=6 完成激活")
-    parser.add_argument("--android-serial", type=str, default=ANDROID_DEVICE_SERIAL, help="GoPay 模拟器 adb serial")
-    parser.add_argument("--skip-whatsapp-otp-reader", action="store_true", help="跳过 WhatsApp 自动读取 OTP，改为文件或手动输入")
-    parser.add_argument("--whatsapp-otp-max-age", type=int, default=WHATSAPP_OTP_MAX_AGE_SECONDS, help="WhatsApp 消息时间与当前时间允许的最大秒差")
-    parser.add_argument("--skip-gopay-unlink-cleanup", action="store_true", help="跳过最终 GoPay Linked apps 解绑收尾")
     parser.add_argument("--proxy", type=str, default="", help="浏览器与 Codex OAuth token exchange 使用的代理，例如 7897 或 http://127.0.0.1:7897")
     parser.add_argument("--email-backend", type=str, default=None, choices=["temp_email", "outlook_email_plus", "manual"], help="选择邮箱后端：temp_email / outlook_email_plus / manual")
     parser.add_argument("--jwt", type=str, default=None, help="已有邮箱的JWT")
@@ -3681,7 +2478,6 @@ async def main():
     if len(sys.argv) == 1:
         choices = _interactive_startup_menu()
         args.manual_email = choices["manual_email"]
-        args.skip_payment = choices["skip_payment"]
 
     resume_alias_email = args.resume_alias_email.strip()
     if resume_alias_email:
@@ -3706,26 +2502,12 @@ async def main():
         selected_backend = "manual"
 
     DEBUG_MODE = args.debug
-    GOPAY_OTP_CODE_FILE = args.gopay_otp_file.strip()
-    if args.gopay_phone.strip():
-        normalized_gopay_phone = args.gopay_phone.strip().lstrip("+")
-        if not normalized_gopay_phone.isdigit():
-            raise SystemExit("[参数错误] --gopay-phone 必须是纯数字；国家码仍使用 GOPAY_COUNTRY_CODE")
-        GOPAY_PHONE = normalized_gopay_phone
     HEROSMS_APIKEY = args.herosms_apikey.strip()
     HEROSMS_INTERVAL = max(1, int(args.herosms_interval or 5))
     HEROSMS_FINISH_AFTER = bool(args.herosms_finish and not args.no_herosms_finish)
-    ANDROID_DEVICE_SERIAL = args.android_serial.strip()
-    WHATSAPP_OTP_AUTO_ENABLED = not args.skip_whatsapp_otp_reader
-    WHATSAPP_OTP_MAX_AGE_SECONDS = max(1, int(args.whatsapp_otp_max_age or 120))
-    GOPAY_UNLINK_CLEANUP_ENABLED = not args.skip_gopay_unlink_cleanup
 
     # 启动前校验 USER CONFIG 是否完整（依据用户最终选择）
-    _validate_user_config(
-        skip_temp_email=args.manual_email,
-        skip_payment=args.skip_payment,
-        email_backend=selected_backend,
-    )
+    _validate_user_config(skip_temp_email=args.manual_email, email_backend=selected_backend)
 
     chatgpt_password = args.password or generate_strong_password(16)
     birthdate = args.birthdate or generate_birthdate()
@@ -3748,13 +2530,8 @@ async def main():
     print("ChatGPT密码: 已跳过设置")
     print(f"姓名: {real_name}")
     print(f"生日: {birthdate}")
-    print(f"跳过支付: {args.skip_payment}")
-    if not args.skip_payment:
-        print(f"GoPay手机号: +{GOPAY_COUNTRY_CODE} {GOPAY_PHONE}")
-        print(f"HeroSMS自动OTP: {bool(HEROSMS_APIKEY)} (interval={HEROSMS_INTERVAL}s)")
-        print(f"Android设备: {ANDROID_DEVICE_SERIAL or '默认 adb 设备'}")
-        print(f"WhatsApp自动OTP: {WHATSAPP_OTP_AUTO_ENABLED} (max_age={WHATSAPP_OTP_MAX_AGE_SECONDS}s)")
-        print(f"GoPay解绑收尾: {GOPAY_UNLINK_CLEANUP_ENABLED}")
+    print("模式: 免费账号")
+    print(f"HeroSMS自动OTP: {bool(HEROSMS_APIKEY)} (interval={HEROSMS_INTERVAL}s)")
     print("=" * 60)
 
     # 存储各步骤结果
@@ -3762,7 +2539,6 @@ async def main():
     jwt = None
     temp_password = None
     sub2api_output_path = ""
-    gopay_cleanup_status = "未执行"
     outlook_email_client = None
 
     async def complete_outlook_claim(result: str = "success", detail: str = "") -> None:
@@ -3940,74 +2716,16 @@ async def main():
                 await release_outlook_claim("登录验证失败")
                 return
 
-            already_plus = bot.current_plan_type.lower() == "plus"
-            if args.skip_payment:
-                logger.info("跳过支付，导出免费账号 Sub2API OAuth token")
-                token_data = await bot.export_codex_sub2api_token(address)
-                sub2api_output_path = Sub2APIExporter.export_account(token_data, notes="ChatGPT 注册机导出（未支付）")
-                print("\n" + "=" * 60)
-                print("免费账户注册完成 (无 Plus)")
-                print(f"邮箱: {address}")
-                print("密码: 已跳过设置")
-                print(f"Sub2API文件: {sub2api_output_path}")
-                print("=" * 60)
-                await complete_outlook_claim("success", "注册成功（跳过支付）")
-                return
-
-            if already_plus:
-                logger.info("当前账号已是 Plus，跳过 GoPay 支付，直接取消续订并导出 Sub2API")
-                logger.info("第 8 步: 跳过 GoPay 支付（账号已是 Plus）")
-                logger.info("第 10 步: 取消订阅")
-                await bot.cancel_subscription()
-                logger.info("第 11 步: Codex OAuth 导出 Sub2API")
-                token_data = await bot.export_codex_sub2api_token(address)
-                sub2api_output_path = Sub2APIExporter.export_account(token_data, notes="ChatGPT 注册机导出（已是 Plus）")
-                logger.info("第 12 步: GoPay Linked apps 解绑收尾")
-                gopay_cleanup_status = await run_gopay_unlink_cleanup()
-                await complete_outlook_claim("success", "注册成功（账号已是 Plus）")
-                print("\n" + "=" * 60)
-                print("🎉 注册完成！")
-                print(f"📧 邮箱: {address}")
-                print("🔑 密码: 已跳过设置")
-                print(f"📁 Sub2API文件: {sub2api_output_path}")
-                print(f"GoPay解绑收尾: {gopay_cleanup_status}")
-                print("=" * 60)
-                return
-
-            # Step 8-9: 支付
-            logger.info("第 8 步: GoPay 支付")
-            await bot.execute_gopay_payment()
-
-            logger.info("第 9 步: 处理 Stripe + Midtrans 结账")
-            payment_result = await bot.handle_stripe_checkout(
-                whatsapp_callback=WhatsAppOTPHandler.prompt_user_for_otp
-            )
-
-            if payment_result != "success":
-                logger.error(f"支付未成功: {payment_result}")
-                print(f"\n支付状态: {payment_result}")
-                print("未导出 Sub2API：支付未成功")
-                await release_outlook_claim(f"支付未成功: {payment_result}")
-                return
-
-            # Step 10: 取消订阅
-            logger.info("第 10 步: 取消订阅")
-            await bot.cancel_subscription()
-
-            # Step 11: Codex OAuth → Sub2API 导出
-            logger.info("第 11 步: Codex OAuth 导出 Sub2API")
+            # Step 8: Codex OAuth → Sub2API 导出
+            logger.info("第 8 步: Codex OAuth 导出 Sub2API")
             token_data = await bot.export_codex_sub2api_token(address)
-            sub2api_output_path = Sub2APIExporter.export_account(token_data, notes="ChatGPT 注册机导出")
-
-            logger.info("第 12 步: GoPay Linked apps 解绑收尾")
-            gopay_cleanup_status = await run_gopay_unlink_cleanup()
+            sub2api_output_path = Sub2APIExporter.export_account(token_data, notes="ChatGPT 免费注册机导出")
 
         print("\n" + "=" * 60)
         print("🎉 注册完成！")
         print(f"📧 邮箱: {address}")
         print("🔑 密码: 已跳过设置")
         print(f"📁 Sub2API文件: {sub2api_output_path}")
-        print(f"GoPay解绑收尾: {gopay_cleanup_status}")
         print("=" * 60)
         await complete_outlook_claim("success", "注册成功")
 
@@ -4031,7 +2749,7 @@ async def main():
         logger.error("未导出 Sub2API：当前邮箱已被 OpenAI 占用")
         await complete_outlook_claim("credential_invalid", str(e))
 
-    except (TempEmailError, SignupFlowError, PaymentError) as e:
+    except (TempEmailError, SignupFlowError) as e:
         logger.error(f"注册流程失败: {type(e).__name__}: {e}")
         logger.error("未导出 Sub2API：流程未完成或 OAuth token 获取失败")
         await release_outlook_claim(f"{type(e).__name__}: {e}")
