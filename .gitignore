@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+.venv_*/
+venv/
+env/
+
+# Local configuration and secrets
+.env
+.env.*
+*.local
+secrets.*
+
+# Runtime outputs
+accounts/
+screenshots/
+debug/
+*.log
+oauth_code.txt
+accounts.json
+accounts.txt
+gpt_free_accounts.json
+sub2api-accounts*.json
+sub2api-free-batch-*.json
+
+# Codex registrar local config and outputs
+codex-registrar2_token/config.json
+codex-registrar2_token/config.local.json
+codex-registrar2_token/config.server.json
+codex-registrar2_token/accounts.json
+codex-registrar2_token/username.json
+codex-registrar2_token/shibai.json
+codex-registrar2_token/tokens/
+codex-registrar2_token/.DS_Store
+
+# Local databases and temporary files
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+*.tmp
+*.temp
+coverage/
+*/coverage/
+*.zip
+*_screenshot*.png
+screenshot_*.png
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
