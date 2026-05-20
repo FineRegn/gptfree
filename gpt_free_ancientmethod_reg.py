@@ -1091,6 +1091,30 @@ async def _execute_oauth_flow(
             # 方案 4: 兜底 _click_submit
             if not clicked_account:
                 try:
+                    submitted = await page.evaluate(
+                        """
+                        () => {
+                            const form = document.querySelector('form[action*="choose-an-account"]');
+                            const button = form?.querySelector('button[name="session_id"]');
+                            if (!form || !button) return false;
+                            if (typeof form.requestSubmit === 'function') {
+                                form.requestSubmit(button);
+                            } else {
+                                button.click();
+                            }
+                            return true;
+                        }
+                        """
+                    )
+                    if submitted:
+                        clicked_account = True
+                        logger.info("OAuth: 已通过 choose-an-account 表单 requestSubmit 提交账号")
+                except Exception as exc:
+                    logger.debug(f"choose-an-account 表单 requestSubmit 失败: {exc}")
+
+            # 方案 5: 最后才用通用提交按钮兜底；账号卡片通常没有“继续”文本
+            if not clicked_account:
+                try:
                     await _click_submit(page)
                     clicked_account = True
                     logger.info("OAuth: 通过 _click_submit 兜底点击账号选择页")

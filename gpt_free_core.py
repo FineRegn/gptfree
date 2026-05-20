@@ -770,7 +770,10 @@ class ChatGPTBot:
             await asyncio.sleep(random.randint(10, 30) / 1000)
 
     async def _fill_controlled_input(self, locator, value: str) -> str:
-        await locator.scroll_into_view_if_needed(timeout=3000)
+        try:
+            await locator.scroll_into_view_if_needed(timeout=3000)
+        except Exception as exc:
+            logger.debug(f"输入框滚动到可视区域失败，继续尝试聚焦输入: {exc}")
         # 先尝试 force click（绕过 label 遮挡），失败则用 JS focus
         try:
             await locator.click(timeout=3000, force=True)
@@ -1073,9 +1076,12 @@ class ChatGPTBot:
         # email-verification 页面: textbox "验证码"
         code_input = None
         for sel in [
-            self.page.get_by_role("textbox", name=re.compile(r"(验证码|verification code)", re.IGNORECASE)),
-            self.page.get_by_placeholder(re.compile(r"(code|验证码|verification)", re.IGNORECASE)),
             self.page.locator("form input").first,
+            self.page.locator('input[autocomplete="one-time-code"]').first,
+            self.page.locator('input[inputmode="numeric"]').first,
+            self.page.locator('input[type="tel"]').first,
+            self.page.get_by_placeholder(re.compile(r"(code|验证码|verification)", re.IGNORECASE)),
+            self.page.get_by_role("textbox", name=re.compile(r"(验证码|verification code)", re.IGNORECASE)),
         ]:
             try:
                 if await sel.is_visible(timeout=5000):
