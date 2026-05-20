@@ -77,6 +77,10 @@ class SmsVerificationTimeoutError(SignupFlowError):
     """手机号验证码超时，允许同一轮重新获取手机号重试。"""
 
 
+class PhoneAlreadyRegisteredError(SignupFlowError):
+    """手机号已关联既有账号，允许同一轮取消当前号码并换号重试。"""
+
+
 def _now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
@@ -638,6 +642,34 @@ def _is_create_password_state(state: dict[str, Any]) -> bool:
     )
 
 
+def _is_phone_already_registered_state(state: dict[str, Any]) -> bool:
+    """检测当前手机号无法用于新注册的明确页面错误。"""
+    text = str(state.get("text") or "")
+    lower_text = text.lower()
+    return any(
+        keyword in lower_text
+        for keyword in (
+            "phone number is already associated",
+            "phone number already associated",
+            "phone already associated",
+            "already associated with this phone",
+            "account already exists with this phone",
+            "an account already exists with this phone",
+        )
+    ) or any(
+        keyword in text
+        for keyword in (
+            "与此电话号码相关联的帐户已存在",
+            "与此电话号码关联的帐户已存在",
+            "与此手机号相关联的帐户已存在",
+            "与此手机号关联的帐户已存在",
+            "该手机号已关联账号",
+            "此手机号已关联账号",
+            "手机号已存在账号",
+        )
+    )
+
+
 def _is_sms_verification_state(state: dict[str, Any]) -> bool:
     url = str(state.get("url") or "")
     text = str(state.get("text") or "")
@@ -825,7 +857,7 @@ async def _complete_phone_registration(
             await sms_client.cancel_activation(activation.activation_id)
         except HeroSMSError as exc:
             logger.warning(f"取消已占用手机号激活失败: {exc}")
-        raise SignupFlowError("手机号已存在账号，进入登录密码页，无法用于新注册")
+        raise PhoneAlreadyRegisteredError("手机号已存在账号，进入登录密码页，无法用于新注册")
 
     logger.info("第 4 步: 创建随机密码")
     password_input = page.locator('input[type="password"]').first
@@ -836,7 +868,19 @@ async def _complete_phone_registration(
     await _click_submit(page)
 
     logger.info("第 5 步: 等待查看手机验证码页面")
-    await _wait_until_state(page, _is_sms_verification_state, "查看你的手机", timeout=90)
+    sms_state = await _wait_until_state(
+        page,
+        lambda state: _is_sms_verification_state(state) or _is_phone_already_registered_state(state),
+        "查看你的手机或手机号已存在账号",
+        timeout=90,
+    )
+    if _is_phone_already_registered_state(sms_state):
+        try:
+            await sms_client.cancel_activation(activation.activation_id)
+            logger.info(f"HeroSMS 已取消已存在账号的手机号激活: {activation.activation_id}")
+        except HeroSMSError as exc:
+            logger.warning(f"取消已存在账号手机号激活失败: {exc}")
+        raise PhoneAlreadyRegisteredError("手机号已关联既有账号，无法用于新注册")
 
     logger.info("第 6 步: 等待 HeroSMS 验证码并提交")
     try:
@@ -1842,22 +1886,26 @@ async def main() -> None:
                                 finish_after=hero_sms_finish_after,
                             )
                             break
-                        except SmsVerificationTimeoutError:
+                        except (SmsVerificationTimeoutError, PhoneAlreadyRegisteredError) as exc:
+                            is_phone_exists = isinstance(exc, PhoneAlreadyRegisteredError)
+                            retry_title = "手机号已存在账号" if is_phone_exists else "手机号验证码超时"
+                            retry_stage = "phone_already_registered" if is_phone_exists else "phone_sms_timeout"
                             logger.warning(
-                                f"手机号验证码超时，准备回退注册页并换号重试 ({phone_attempt}/{phone_retries})"
+                                f"{retry_title}，准备回退注册页并换号重试 ({phone_attempt}/{phone_retries})"
                             )
                             notify_failure(
-                                "手机号验证码超时",
-                                f"第 {round_num}/{rounds} 轮手机号 {activation.phone} 超时，"
+                                retry_title,
+                                f"第 {round_num}/{rounds} 轮手机号 {activation.phone} {retry_title}，"
                                 f"准备换号重试 ({phone_attempt}/{phone_retries})。",
                             )
                             account_record.update(
                                 {
-                                    "stage": "phone_sms_timeout",
+                                    "stage": retry_stage,
                                     "status": "retrying_phone",
                                     "phone": activation.phone,
                                     "activation_id": activation.activation_id,
                                     "phone_attempt": phone_attempt,
+                                    "phone_retry_reason": type(exc).__name__,
                                 }
                             )
                             upsert_account_record(account_record, account_record_file)
