@@ -1607,7 +1607,7 @@ async def main() -> None:
         )
 
     # ── 跨轮共享的初始化 ──
-    bot_module.DEBUG_MODE = bool(args.debug or args.keep_open)
+    bot_module.DEBUG_MODE = bool(args.keep_open)
     proxy_url = normalize_proxy_url(args.proxy)
     hero_sms_api_key = args.herosms_apikey.strip()
     hero_sms_service = args.herosms_service.strip() or HEROSMS_OPENAI_SERVICE
