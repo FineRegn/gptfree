@@ -30,6 +30,9 @@ accounts.txt
 gpt_free_accounts.json
 sub2api-accounts*.json
 sub2api-free-batch-*.json
+reauthorize/*.json
+reauthorize/*.json.bak-*
+reauthorize/oauth-codes/
 
 # Local databases and temporary files
 *.db

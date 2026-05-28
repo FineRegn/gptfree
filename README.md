@@ -11,6 +11,7 @@ gptfree/
 ├── outlook_email_plus_integration.py  # Outlook 邮箱池客户端
 ├── hero_sms_client.py               # HeroSMS 接码客户端
 ├── codex_oauth_sub2api_once.py      # 单步 OAuth Sub2API 导出
+├── reauthorize_sub2api.py           # Sub2API 账号批量重新授权
 ├── release_outlook_email_pool.py/bat/cmd  # 邮箱池释放工具
 ├── outlookEmailPlus/                # 邮箱池 API 服务（Flask）
 ├── gpt_free_config.example.json     # 本地配置示例
@@ -307,7 +308,63 @@ python -u codex_oauth_sub2api_once.py `
   --debug
 ```
 
-## 7. 相关文件
+## 7. Sub2API 批量重新授权
+
+已有 Sub2API 导出文件中的 OAuth 账号，可用 `reauthorize_sub2api.py` 逐账号重新走 Codex OAuth，并将新的 `access_token`、`refresh_token`、`expires_at` 等字段写回原 JSON。脚本会保留原账号对象中的 `extra`、`model_mapping`、并发与权重等字段。
+
+先预览待处理账号，不打开浏览器、不写文件：
+
+```powershell
+python -u reauthorize_sub2api.py `
+  --input ".\reauthorize\sub2api-account-20260528103145.json" `
+  --dry-run
+```
+
+单账号验证：
+
+```powershell
+python -u reauthorize_sub2api.py `
+  --input ".\reauthorize\sub2api-account-20260528103145.json" `
+  --limit 1 `
+  --proxy "7897" `
+  --debug
+```
+
+继续处理剩余账号：
+
+```powershell
+python -u reauthorize_sub2api.py `
+  --input ".\reauthorize\sub2api-account-20260528103145.json" `
+  --retry-failed `
+  --account-retries 3 `
+  --flow-timeout 180 `
+  --proxy "7897" `
+  --debug
+```
+
+重授权行为：
+
+1. 使用账号自身邮箱进入 Codex OAuth。
+2. 通过 OutlookEmailPlus `use_existing_email()` 自动读取该别名邮箱验证码。
+3. 自动遍历验证码接口、等待邮件接口、最新邮件接口、邮件列表接口，并同时检查 `junkemail` 垃圾箱。
+4. OAuth 成功后立即关闭浏览器，并原子写回 Sub2API JSON。
+5. 若进入 `https://auth.openai.com/phone-verification`，标记为 `skipped_phone_verification` 并跳过该账号。
+6. 单次 OAuth 默认 `--flow-timeout 180` 秒；超时后按 `--account-retries` 从头重试该账号，重试耗尽后进入下一个账号。
+
+断点续跑：
+
+- 默认进度文件为 `<input>.checkpoint.json`。
+- `completed` 账号默认跳过。
+- `failed` 账号需加 `--retry-failed` 才会重试。
+- `skipped_phone_verification` 默认跳过；如需重新处理可加 `--force`。
+- 每次真实写回前会创建 `<input>.bak-时间戳` 备份；如不需要可加 `--no-backup`。
+
+安全注意：
+
+- `reauthorize/*.json`、`reauthorize/oauth-codes/` 已被 `.gitignore` 排除，不要提交 token 导出、checkpoint、备份或验证码文件。
+- 控制台只打印脱敏邮箱，不打印 `access_token`、`refresh_token`、`id_token` 或 OAuth code。
+
+## 8. 相关文件
 
 | 文件 | 作用 |
 |------|------|
@@ -316,6 +373,7 @@ python -u codex_oauth_sub2api_once.py `
 | `outlook_email_plus_integration.py` | 邮箱池客户端（领取/读信/验证码轮询） |
 | `hero_sms_client.py` | HeroSMS 查询激活与 OTP 抽取 |
 | `codex_oauth_sub2api_once.py` | 单步 Sub2API 导出 |
+| `reauthorize_sub2api.py` | 从 Sub2API 导出文件批量重新授权并写回 token |
 | `release_outlook_email_pool.bat` | 一键释放邮箱池 claimed 账号 |
 | `registration_bot.log` | 运行日志 |
 | `screenshots/` | 自动截图 |
