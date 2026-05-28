@@ -298,7 +298,7 @@ async def _real_mouse_click_locator(page: "Page", locator: "Locator", descriptio
 
 async def _click_button_by_text(page: "Page", texts: list[str], timeout: int = 10000) -> None:
     deadline = asyncio.get_running_loop().time() + timeout / 1000
-    wanted = [str(text).lower() for text in texts]
+    wanted = [re.sub(r"\s+", "", str(text).lower()) for text in texts]
     last_error = ""
     while asyncio.get_running_loop().time() < deadline:
         buttons = page.locator('button, [role="button"], a')
@@ -309,6 +309,7 @@ async def _click_button_by_text(page: "Page", texts: list[str], timeout: int = 1
                 if not await locator.is_visible(timeout=500):
                     continue
                 text = (await locator.inner_text(timeout=500)).strip().lower()
+                text = re.sub(r"\s+", "", text)
                 if text and any(item in text for item in wanted):
                     await _real_mouse_click_locator(page, locator, f"按钮 {texts}", timeout=1000)
                     return
@@ -701,16 +702,23 @@ def _is_about_you_state(state: dict[str, Any]) -> bool:
 
 
 def _is_signup_modal_state(state: dict[str, Any]) -> bool:
+    url = str(state.get("url") or "")
     text = str(state.get("text") or "")
     lower_text = text.lower()
-    return (
-        "登录或注册" in text
-        or "使用电话号码继续" in text
+    is_auth_page = "/auth/" in url or "auth.openai.com" in url
+    has_phone_or_email_entry = (
+        "使用电话号码继续" in text
+        or "使用手机号继续" in text
+        or "使用手机号码继续" in text
         or "使用电子邮箱继续" in text
-        or "Log in or sign up" in text
         or "continue with phone" in lower_text
         or "continue with email" in lower_text
     )
+    if has_phone_or_email_entry:
+        return True
+    if "登录或注册" in text and "登录或注册即可" not in text:
+        return True
+    return "log in or sign up" in lower_text or (is_auth_page and "登录或注册" in text)
 
 
 async def _open_signup_modal(page) -> None:
@@ -734,7 +742,11 @@ async def _open_signup_modal(page) -> None:
 
         if not clicked:
             try:
-                await _click_button_by_text(page, ["免费注册", "Sign up for free", "Sign up"], timeout=5000)
+                await _click_button_by_text(
+                    page,
+                    ["免费注册", "注册", "Sign up for free", "Sign up", "Create account", "Get started"],
+                    timeout=5000,
+                )
                 clicked = True
             except Exception as exc:
                 logger.warning(f"注册按钮文本点击失败: {exc}")
